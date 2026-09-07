@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HospiSoft — Citas</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="min-vh-100">
+    <aside class="sidebar d-flex flex-column" id="sidebar">
+      <div class="p-3 border-bottom" style="border-color: rgba(255,255,255,.15) !important;">
+        <div class="d-flex align-items-center gap-2">
+          <div>
+            <div class="fw-bold fs-5 lh-1 text-white">HospiSoft</div>
+            <small class="text-white-50">Sistema Hospitalario</small>
+          </div>
+        </div>
+      </div>
+      <ul class="list-unstyled mb-0 flex-grow-1 pt-2">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-home" style="width:1.25rem;text-align:center"></i> Dashboard</a></li>
+        <li><a href="medicos.html" class="nav-link"><i class="fas fa-user-md" style="width:1.25rem;text-align:center"></i> Médicos</a></li>
+        <li><a href="pacientes.html" class="nav-link"><i class="fas fa-users" style="width:1.25rem;text-align:center"></i> Pacientes</a></li>
+        <li><a href="citas.html" class="nav-link active"><i class="fas fa-calendar-check" style="width:1.25rem;text-align:center"></i> Citas</a></li>
+        <li><a href="medicamentos.html" class="nav-link"><i class="fas fa-capsules" style="width:1.25rem;text-align:center"></i> Medicamentos</a></li>
+      </ul>
+      <div class="p-3 border-top text-white-50 small" style="border-color: rgba(255,255,255,.15) !important;">
+        <i class="fas fa-circle text-success" style="font-size:.5rem;vertical-align:middle"></i>
+        <span class="ms-1">Sistema activo</span>
+      </div>
+    </aside>
+
+    <main class="main-content d-flex flex-column">
+      <header class="top-navbar sticky-top bg-white border-bottom shadow-sm d-flex align-items-center justify-content-between px-4" style="height:60px;">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn d-md-none p-0" type="button" onclick="document.getElementById('sidebar').classList.toggle('show')">
+            <i class="fas fa-bars fs-5"></i>
+          </button>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <i class="fas fa-bell text-muted"></i>
+          <div class="d-flex align-items-center gap-2 text-muted small">
+            <span>Dr. Admin</span>
+            <span class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width:36px;height:36px;background:var(--clr-light);color:var(--clr-text);font-weight:700;">A</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="p-4 flex-grow-1">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+          <h4 class="mb-0 fw-semibold">Gestión de Citas</h4>
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCita"><i class="fas fa-plus me-1"></i> Agregar Cita</button>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 p-3 bg-white rounded-3 shadow-sm">
+          <div class="input-group" style="max-width:220px;">
+            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" class="form-control" placeholder="Buscar cita...">
+          </div>
+          <div class="input-group" style="max-width:180px;">
+            <span class="input-group-text bg-white"><i class="fas fa-calendar text-muted"></i></span>
+            <input type="date" class="form-control">
+          </div>
+          <select class="form-select" style="max-width:160px;">
+            <option>Todos los estados</option>
+            <option>Pendiente</option>
+            <option>Confirmada</option>
+            <option>Completada</option>
+            <option>Cancelada</option>
+          </select>
+          <select class="form-select" style="max-width:180px;">
+            <option>Todos los médicos</option>
+            <option>Dr. Carlos García</option>
+            <option>Dra. Laura Martínez</option>
+            <option>Dr. Andrés Rodríguez</option>
+          </select>
+          <button class="btn btn-outline-secondary"><i class="fas fa-sync-alt me-1"></i>Filtrar</button>
+        </div>
+
+        <div class="bg-white rounded-3 shadow-sm overflow-hidden">
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-primary">
+                <tr>
+                  <th class="text-uppercase small">#</th>
+                  <th class="text-uppercase small">Paciente</th>
+                  <th class="text-uppercase small">Médico</th>
+                  <th class="text-uppercase small">Especialidad</th>
+                  <th class="text-uppercase small">Fecha</th>
+                  <th class="text-uppercase small">Hora</th>
+                  <th class="text-uppercase small">Estado</th>
+                  <th class="text-center text-uppercase small">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>001</td>
+                  <td>María López</td>
+                  <td>Dr. Carlos García</td>
+                  <td>Cardiología</td>
+                  <td>28/06/2026</td>
+                  <td>15:30</td>
+                  <td><span class="badge-stock confirmada">Confirmada</span></td>
+                  <td class="text-center">
+                    <button class="btn-icon edit" data-bs-toggle="modal" data-bs-target="#modalCita" title="Editar"><i class="fas fa-pen"></i></button>
+                    <button class="btn-icon delete" data-bs-toggle="modal" data-bs-target="#modalEliminar" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>002</td>
+                  <td>Carlos Ruiz</td>
+                  <td>Dra. Laura Martínez</td>
+                  <td>Pediatría</td>
+                  <td>28/06/2026</td>
+                  <td>16:00</td>
+                  <td><span class="badge-stock pendiente">Pendiente</span></td>
+                  <td class="text-center">
+                    <button class="btn-icon edit" data-bs-toggle="modal" data-bs-target="#modalCita" title="Editar"><i class="fas fa-pen"></i></button>
+                    <button class="btn-icon delete" data-bs-toggle="modal" data-bs-target="#modalEliminar" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>003</td>
+                  <td>Ana Torres</td>
+                  <td>Dr. Andrés Rodríguez</td>
+                  <td>Neurología</td>
+                  <td>29/06/2026</td>
+                  <td>09:00</td>
+                  <td><span class="badge-stock confirmada">Confirmada</span></td>
+                  <td class="text-center">
+                    <button class="btn-icon edit" data-bs-toggle="modal" data-bs-target="#modalCita" title="Editar"><i class="fas fa-pen"></i></button>
+                    <button class="btn-icon delete" data-bs-toggle="modal" data-bs-target="#modalEliminar" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>004</td>
+                  <td>Pedro Sánchez</td>
+                  <td>Dr. Roberto Mendoza</td>
+                  <td>Traumatología</td>
+                  <td>29/06/2026</td>
+                  <td>10:30</td>
+                  <td><span class="badge-stock completada">Completada</span></td>
+                  <td class="text-center">
+                    <button class="btn-icon edit" data-bs-toggle="modal" data-bs-target="#modalCita" title="Editar"><i class="fas fa-pen"></i></button>
+                    <button class="btn-icon delete" data-bs-toggle="modal" data-bs-target="#modalEliminar" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>005</td>
+                  <td>Sofía Díaz</td>
+                  <td>Dra. Patricia Gómez</td>
+                  <td>Medicina General</td>
+                  <td>30/06/2026</td>
+                  <td>08:30</td>
+                  <td><span class="badge-stock confirmada">Confirmada</span></td>
+                  <td class="text-center">
+                    <button class="btn-icon edit" data-bs-toggle="modal" data-bs-target="#modalCita" title="Editar"><i class="fas fa-pen"></i></button>
+                    <button class="btn-icon delete" data-bs-toggle="modal" data-bs-target="#modalEliminar" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>006</td>
+                  <td>Luis Fernández</td>
+                  <td>Dr. Carlos García</td>
+                  <td>Cardiología</td>
+                  <td>30/06/2026</td>
+                  <td>11:00</td>
+                  <td><span class="badge-stock cancelada">Cancelada</span></td>
+                  <td class="text-center">
+                    <button class="btn-icon edit" data-bs-toggle="modal" data-bs-target="#modalCita" title="Editar"><i class="fas fa-pen"></i></button>
+                    <button class="btn-icon delete" data-bs-toggle="modal" data-bs-target="#modalEliminar" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <small class="text-muted">Mostrando 6 de 142 citas</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item disabled"><a class="page-link" href="#"><i class="fas fa-chevron-left"></i></a></li>
+                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                <li class="page-item"><a class="page-link" href="#">2</a></li>
+                <li class="page-item"><a class="page-link" href="#">3</a></li>
+                <li class="page-item"><a class="page-link" href="#">...</a></li>
+                <li class="page-item"><a class="page-link" href="#">24</a></li>
+                <li class="page-item"><a class="page-link" href="#"><i class="fas fa-chevron-right"></i></a></li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal fade" id="modalCita" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-blue">
+          <h5 class="modal-title">Nueva Cita</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Paciente</label>
+                <select class="form-select">
+                  <option>Seleccione paciente...</option>
+                  <option>María López</option>
+                  <option>Carlos Ruiz</option>
+                  <option>Ana Torres</option>
+                  <option>Pedro Sánchez</option>
+                  <option>Sofía Díaz</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Médico</label>
+                <select class="form-select">
+                  <option>Seleccione médico...</option>
+                  <option>Dr. Carlos García — Cardiología</option>
+                  <option>Dra. Laura Martínez — Pediatría</option>
+                  <option>Dr. Andrés Rodríguez — Neurología</option>
+                  <option>Dr. Roberto Mendoza — Traumatología</option>
+                  <option>Dra. Patricia Gómez — Medicina General</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Fecha</label>
+                <input type="date" class="form-control">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Hora</label>
+                <input type="time" class="form-control">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-medium small">Motivo de consulta</label>
+                <textarea class="form-control" rows="3" placeholder="Describa el motivo de la consulta"></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Estado</label>
+                <select class="form-select">
+                  <option>Pendiente</option>
+                  <option>Confirmada</option>
+                  <option>Completada</option>
+                  <option>Cancelada</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Tipo</label>
+                <select class="form-select">
+                  <option>Primera vez</option>
+                  <option>Control</option>
+                  <option>Urgencia</option>
+                  <option>Retiro de resultados</option>
+                </select>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary"><i class="fas fa-save me-1"></i>Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEliminar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-body text-center py-4">
+          <i class="fas fa-exclamation-triangle fs-1" style="color:var(--clr-red);"></i>
+          <h6 class="fw-semibold mt-2">¿Eliminar cita?</h6>
+          <p class="small text-muted mb-0">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer justify-content-center border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" data-bs-dismiss="modal"><i class="fas fa-trash me-1"></i>Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
