@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HospiSoft — Dashboard</title>
+  <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="min-vh-100">
+    <aside class="sidebar d-flex flex-column" id="sidebar">
+      <div class="p-3 border-bottom" style="border-color: rgba(255,255,255,.15) !important;">
+        <div class="d-flex align-items-center gap-2">
+          <div>
+            <div class="fw-bold fs-5 lh-1 text-white">HospiSoft</div>
+            <small class="text-white-50">Sistema Hospitalario</small>
+          </div>
+        </div>
+      </div>
+      <ul class="list-unstyled mb-0 flex-grow-1 pt-2">
+        <li><a href="index.html" class="nav-link active"><i class="fas fa-home" style="width:1.25rem;text-align:center"></i> Dashboard</a></li>
+        <li><a href="medicos.html" class="nav-link"><i class="fas fa-user-md" style="width:1.25rem;text-align:center"></i> Médicos</a></li>
+        <li><a href="pacientes.html" class="nav-link"><i class="fas fa-users" style="width:1.25rem;text-align:center"></i> Pacientes</a></li>
+        <li><a href="citas.html" class="nav-link"><i class="fas fa-calendar-check" style="width:1.25rem;text-align:center"></i> Citas</a></li>
+        <li><a href="medicamentos.html" class="nav-link"><i class="fas fa-capsules" style="width:1.25rem;text-align:center"></i> Medicamentos</a></li>
+      </ul>
+      <ul class="list-unstyled mb-0">
+        <li><a href="#" class="nav-link" id="nav-logout"><i class="fas fa-sign-out-alt" style="width:1.25rem;text-align:center"></i> Cerrar sesión</a></li>
+      </ul>
+      <div class="p-3 border-top text-white-50 small" style="border-color: rgba(255,255,255,.15) !important;">
+        <i class="fas fa-circle text-success" style="font-size:.5rem;vertical-align:middle"></i>
+        <span class="ms-1">Sistema activo</span>
+      </div>
+    </aside>
+
+    <main class="main-content d-flex flex-column">
+      <header class="top-navbar sticky-top bg-white border-bottom shadow-sm d-flex align-items-center justify-content-between px-4" style="height:60px;">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn d-md-none p-0" type="button" onclick="document.getElementById('sidebar').classList.toggle('show')">
+            <i class="fas fa-bars fs-5"></i>
+          </button>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <i class="fas fa-bell text-muted"></i>
+          <div class="d-flex align-items-center gap-2 text-muted small">
+            <span id="topbar-user-name">Dr. Admin</span>
+            <span id="topbar-user-avatar" class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width:36px;height:36px;background:var(--clr-light);color:var(--clr-text);font-weight:700;">A</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="p-4 flex-grow-1">
+        <div class="p-3 bg-white rounded-3 shadow-sm mb-4">
+          <h6 class="mb-1" style="color:var(--clr-text);"><i class="fas fa-hospital me-2"></i>Hospital General — HospiSoft</h6>
+          <p class="mb-0 text-muted small">Bienvenido al panel de control. Resumen general del hospital.</p>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:56px;height:56px;background:var(--clr-light);color:var(--clr-text);font-size:1.5rem;">
+                  <i class="fas fa-user-md"></i>
+                </div>
+                <div>
+                  <div class="fs-3 fw-bold lh-1" id="kpi-medicos-valor">–</div>
+                  <div class="text-muted small" id="kpi-medicos-etiqueta">Médicos</div>
+                  <div class="small text-success"><i class="fas fa-circle-info me-1"></i><span id="kpi-medicos-detalle">–</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:56px;height:56px;background:#E8F5E9;color:#66BB6A;font-size:1.5rem;">
+                  <i class="fas fa-users"></i>
+                </div>
+                <div>
+                  <div class="fs-3 fw-bold lh-1" id="kpi-pacientes-valor">–</div>
+                  <div class="text-muted small" id="kpi-pacientes-etiqueta">Pacientes</div>
+                  <div class="small text-success"><i class="fas fa-circle-info me-1"></i><span id="kpi-pacientes-detalle">–</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:56px;height:56px;background:#FFF3E0;color:#FFA726;font-size:1.5rem;">
+                  <i class="fas fa-calendar-check"></i>
+                </div>
+                <div>
+                  <div class="fs-3 fw-bold lh-1" id="kpi-citas-valor">–</div>
+                  <div class="text-muted small" id="kpi-citas-etiqueta">Citas</div>
+                  <div class="small text-warning"><i class="fas fa-circle-info me-1"></i><span id="kpi-citas-detalle">–</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-0 shadow-sm h-100">
+              <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:56px;height:56px;background:#F3E5F5;color:#AB47BC;font-size:1.5rem;">
+                  <i class="fas fa-capsules"></i>
+                </div>
+                <div>
+                  <div class="fs-3 fw-bold lh-1" id="kpi-medicamentos-valor">–</div>
+                  <div class="text-muted small" id="kpi-medicamentos-etiqueta">Medicamentos</div>
+                  <div class="small text-danger"><i class="fas fa-circle-info me-1"></i><span id="kpi-medicamentos-detalle">–</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+                <h6 class="mb-0 fw-semibold" style="color:var(--clr-text);"><i class="fas fa-calendar-alt me-2"></i>Próximas Citas</h6>
+                <a href="citas.html" class="btn btn-outline-secondary btn-sm">Ver todas</a>
+              </div>
+              <div class="card-body p-0">
+                <ul class="activity-list px-3" id="proximas-citas">
+                  <li>
+                    <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:36px;height:36px;background:var(--clr-light);color:var(--clr-text);">
+                      <i class="fas fa-user-md"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                      <div><strong>–</strong></div>
+                      <div class="small text-muted"><i class="far fa-clock me-1"></i>–</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+              <div class="card-header bg-white border-bottom py-3">
+                <h6 class="mb-0 fw-semibold" style="color:var(--clr-text);"><i class="fas fa-chart-pie me-2"></i>Resumen del Día</h6>
+              </div>
+              <div class="card-body">
+                <div class="row g-2 mb-3">
+                  <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:var(--clr-light);">
+                      <small class="text-muted d-block">Citas hoy</small>
+                      <span class="fw-bold fs-4" style="color:var(--clr-text);" id="resumen-total">–</span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:#E8F5E9;">
+                      <small class="text-muted d-block">Atendidos</small>
+                      <span class="fw-bold fs-4" style="color:#2E7D32;" id="resumen-atendidas">–</span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:var(--clr-mid);">
+                      <small class="text-muted d-block">En curso</small>
+                      <span class="fw-bold fs-4" style="color:var(--clr-text);" id="resumen-encurso">–</span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:#FFF3E0;">
+                      <small class="text-muted d-block">Pendientes</small>
+                      <span class="fw-bold fs-4" style="color:#E65100;" id="resumen-pendientes">–</span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="p-3 rounded-3 text-center" style="background:#FBE9E7;">
+                      <small class="text-muted d-block">Canceladas</small>
+                      <span class="fw-bold fs-4" style="color:#C62828;" id="resumen-canceladas">–</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-between text-muted small">
+                  <span><i class="fas fa-chart-line me-1"></i>Atendidas hoy (sobre citas no canceladas): <span id="resumen-atendidas-pct">–</span></span>
+                  <span><i class="fas fa-user-clock me-1"></i>Duración prom.: <span id="resumen-duracion">–</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/crud.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

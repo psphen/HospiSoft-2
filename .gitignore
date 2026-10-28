@@ -3,6 +3,10 @@ out/
 build/
 *.class
 bin/
+target/
+
+# Runtime configuration (credentials): never commit
+config.properties
 
 # IDE
 .idea/
@@ -12,3 +16,9 @@ bin/
 # Sistema
 Thumbs.db
 .DS_Store
+
+# Maven wrapper uses the only-script distribution: no jar is needed
+.mvn/wrapper/maven-wrapper.jar
+
+# Local tooling state
+.atl/

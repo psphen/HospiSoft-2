@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HospiSoft — Medicamentos</title>
+  <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="min-vh-100">
+    <aside class="sidebar d-flex flex-column" id="sidebar">
+      <div class="p-3 border-bottom" style="border-color: rgba(255,255,255,.15) !important;">
+        <div class="d-flex align-items-center gap-2">
+          <div>
+            <div class="fw-bold fs-5 lh-1 text-white">HospiSoft</div>
+            <small class="text-white-50">Sistema Hospitalario</small>
+          </div>
+        </div>
+      </div>
+      <ul class="list-unstyled mb-0 flex-grow-1 pt-2">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-home" style="width:1.25rem;text-align:center"></i> Dashboard</a></li>
+        <li><a href="medicos.html" class="nav-link"><i class="fas fa-user-md" style="width:1.25rem;text-align:center"></i> Médicos</a></li>
+        <li><a href="pacientes.html" class="nav-link"><i class="fas fa-users" style="width:1.25rem;text-align:center"></i> Pacientes</a></li>
+        <li><a href="citas.html" class="nav-link"><i class="fas fa-calendar-check" style="width:1.25rem;text-align:center"></i> Citas</a></li>
+        <li><a href="medicamentos.html" class="nav-link active"><i class="fas fa-capsules" style="width:1.25rem;text-align:center"></i> Medicamentos</a></li>
+      </ul>
+      <ul class="list-unstyled mb-0">
+        <li><a href="#" class="nav-link" id="nav-logout"><i class="fas fa-sign-out-alt" style="width:1.25rem;text-align:center"></i> Cerrar sesión</a></li>
+      </ul>
+      <div class="p-3 border-top text-white-50 small" style="border-color: rgba(255,255,255,.15) !important;">
+        <i class="fas fa-circle text-success" style="font-size:.5rem;vertical-align:middle"></i>
+        <span class="ms-1">Sistema activo</span>
+      </div>
+    </aside>
+
+    <main class="main-content d-flex flex-column">
+      <header class="top-navbar sticky-top bg-white border-bottom shadow-sm d-flex align-items-center justify-content-between px-4" style="height:60px;">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn d-md-none p-0" type="button" onclick="document.getElementById('sidebar').classList.toggle('show')">
+            <i class="fas fa-bars fs-5"></i>
+          </button>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <i class="fas fa-bell text-muted"></i>
+          <div class="d-flex align-items-center gap-2 text-muted small">
+            <span id="topbar-user-name">Dr. Admin</span>
+            <span id="topbar-user-avatar" class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width:36px;height:36px;background:var(--clr-light);color:var(--clr-text);font-weight:700;">A</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="p-4 flex-grow-1">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+          <h4 class="mb-0 fw-semibold" id="page-title">Gestión de Medicamentos</h4>
+          <button class="btn btn-primary" id="btn-add" data-bs-toggle="modal" data-bs-target="#modalMedicamento"><i class="fas fa-plus me-1"></i> Agregar Medicamento</button>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 p-3 bg-white rounded-3 shadow-sm" id="filters-bar">
+          <div class="input-group" style="max-width:260px;">
+            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" class="form-control" id="filter-search" placeholder="Buscar medicamento...">
+          </div>
+          <select class="form-select" id="filter-activo" style="max-width:170px;">
+            <option value="">Todos</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
+          </select>
+          <select class="form-select" id="filter-estado" style="max-width:140px;">
+            <option value="">Todos los estados</option>
+            <option value="DISPONIBLE">Disponible</option>
+            <option value="STOCK_BAJO">Stock Bajo</option>
+            <option value="AGOTADO">Agotado</option>
+          </select>
+          <button class="btn btn-outline-secondary" id="btn-filter"><i class="fas fa-sync-alt me-1"></i>Filtrar</button>
+        </div>
+
+        <div class="bg-white rounded-3 shadow-sm overflow-hidden" id="stock-card">
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-primary">
+                <tr>
+                  <th class="text-uppercase small">#</th>
+                  <th class="text-uppercase small">Código</th>
+                  <th class="text-uppercase small">Nombre</th>
+                  <th class="text-uppercase small">Presentación</th>
+                  <th class="text-uppercase small">Stock</th>
+                  <th class="text-uppercase small">Stock mín.</th>
+                  <th class="text-uppercase small">Estado</th>
+                  <th class="text-center text-uppercase small">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="medicamentos-body">
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <small class="text-muted" id="page-summary">Mostrando 0 de 0 medicamentos</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0" id="pagination">
+              </ul>
+            </nav>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3 shadow-sm overflow-hidden d-none" id="ordenes-card">
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-primary">
+                <tr>
+                  <th class="text-uppercase small">Fecha</th>
+                  <th class="text-uppercase small">Medicamento</th>
+                  <th class="text-uppercase small">Cantidad</th>
+                  <th class="text-uppercase small">Dosis</th>
+                  <th class="text-uppercase small">Duración</th>
+                  <th class="text-uppercase small">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="ordenes-body">
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <small class="text-muted" id="ordenes-summary">Mostrando 0 de 0 órdenes</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0" id="ordenes-pagination">
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal fade" id="modalMedicamento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-blue">
+          <h5 class="modal-title" id="modalMedicamentoTitle">Nuevo Medicamento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger small d-none" id="modal-alert" role="alert"></div>
+          <form id="form-medicamento" method="post" onsubmit="return false" novalidate>
+            <input type="hidden" id="medicamento-id" value="">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-medium small" for="medicamento-codigo">Código</label>
+                <input type="text" class="form-control" id="medicamento-codigo" placeholder="Ej: MED-011" maxlength="20">
+                <div class="invalid-feedback"></div>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label fw-medium small" for="medicamento-nombre">Nombre del Medicamento</label>
+                <input type="text" class="form-control" id="medicamento-nombre" placeholder="Ej: Paracetamol 500mg" maxlength="100">
+                <div class="invalid-feedback"></div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium small" for="medicamento-presentacion">Presentación</label>
+                <input type="text" class="form-control" id="medicamento-presentacion" placeholder="Ej: Tabletas x 20" maxlength="80">
+                <div class="invalid-feedback"></div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium small" for="medicamento-stock">Stock</label>
+                <input type="number" class="form-control" id="medicamento-stock" placeholder="0" min="0" step="1">
+                <div class="invalid-feedback"></div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium small" for="medicamento-stock-minimo">Stock mínimo</label>
+                <input type="number" class="form-control" id="medicamento-stock-minimo" placeholder="0" min="0" step="1">
+                <div class="invalid-feedback"></div>
+              </div>
+              <div class="col-md-6 d-none" id="medicamento-activo-group">
+                <label class="form-label fw-medium small" for="medicamento-activo">Estado</label>
+                <select class="form-select" id="medicamento-activo">
+                  <option value="true">Activo</option>
+                  <option value="false">Inactivo</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-medium small" for="medicamento-descripcion">Descripción</label>
+                <textarea class="form-control" id="medicamento-descripcion" rows="2" placeholder="Indicaciones, contraindicaciones, etc." maxlength="200"></textarea>
+                <div class="invalid-feedback"></div>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btn-save"><i class="fas fa-save me-1"></i>Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalEliminar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-body text-center py-4">
+          <i class="fas fa-exclamation-triangle fs-1" style="color:var(--clr-red);"></i>
+          <h6 class="fw-semibold mt-2">¿Eliminar medicamento?</h6>
+          <p class="small text-muted mb-0">Si tiene historial asociado, se dará de baja lógica en lugar de eliminarse.</p>
+        </div>
+        <div class="modal-footer justify-content-center border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="btn-confirm-delete"><i class="fas fa-trash me-1"></i>Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/crud.js"></script>
+  <script src="js/atencion.js"></script>
+  <script src="js/medicamentos.js"></script>
+</body>
+</html>

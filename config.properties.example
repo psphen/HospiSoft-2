@@ -1,0 +1,25 @@
+# HospiSoft Desktop - database configuration
+#
+# Copy this file to "config.properties" next to hospisoft-desktop.jar
+# (or in the project root when running from source) and fill in the values.
+# The real config.properties is gitignored: never commit credentials.
+#
+# Use the Supabase *session pooler* connection (port 5432):
+#   Supabase Dashboard -> Project -> Connect -> Session pooler
+#   Host looks like aws-0-<region>.pooler.supabase.com, user looks like postgres.<project-ref>
+#
+# Do NOT use:
+#   - the direct host db.<project-ref>.supabase.co (IPv6 only, usually unreachable)
+#   - the transaction pooler on port 6543 (prepared statements are not supported there)
+#
+# sslmode=require is mandatory.
+#
+# Values are taken verbatim (trailing spaces included) and read as UTF-8.
+# A backslash inside a value must be doubled: pa\ss -> pa\\ss
+
+db.url=jdbc:postgresql://aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
+db.user=postgres.PROJECT_REF
+db.password=CHANGE_ME
+
+# Optional: number of pooled connections (default 3)
+db.pool.size=3

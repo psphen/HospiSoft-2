@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.hospisoft</groupId>
+  <artifactId>hospisoft-desktop</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>HospiSoft Desktop</name>
+  <description>Hospital management desktop application (JavaFX WebView + PostgreSQL)</description>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <javafx.version>21.0.13</javafx.version>
+    <postgresql.version>42.7.14</postgresql.version>
+    <junit.version>5.11.3</junit.version>
+    <main.class>com.hospisoft.ui.Launcher</main.class>
+  </properties>
+
+  <dependencies>
+    <!-- Runtime: JavaFX (UI + WebView) -->
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-controls</artifactId>
+      <version>${javafx.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-web</artifactId>
+      <version>${javafx.version}</version>
+    </dependency>
+
+    <!-- Runtime: PostgreSQL JDBC driver -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${postgresql.version}</version>
+    </dependency>
+
+    <!-- Test only -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>hospisoft-desktop</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+      </plugin>
+
+      <!-- Dev run: ./mvnw javafx:run -->
+      <plugin>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-maven-plugin</artifactId>
+        <version>0.0.8</version>
+        <configuration>
+          <mainClass>${main.class}</mainClass>
+        </configuration>
+      </plugin>
+
+      <!-- Fat jar: target/hospisoft-desktop.jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>${main.class}</mainClass>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+
+  <profiles>
+    <!--
+      Native app-image built with the JDK's own jpackage (no installer, so no WiX/Inno needed):
+          mvnw.cmd clean package -Ppackage-win
+      produces target/dist/HospiSoft/HospiSoft.exe. exec-maven-plugin is a BUILD plugin, like
+      shade, surefire and javafx-maven-plugin: the runtime dependency rule (JavaFX + PostgreSQL
+      only) is untouched, nothing is added to the application classpath.
+    -->
+    <profile>
+      <id>package-win</id>
+      <build>
+        <plugins>
+          <!--
+            jpackage refuses to write into an existing application directory, so a second
+            "package -Ppackage-win" without a clean would fail. Plugins bound to the same phase run
+            in declaration order, so this removal happens before the image is produced.
+          -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-clean-plugin</artifactId>
+            <version>3.2.0</version>
+            <executions>
+              <execution>
+                <id>remove-previous-image</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>clean</goal>
+                </goals>
+                <configuration>
+                  <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                  <filesets>
+                    <fileset>
+                      <directory>${project.build.directory}/dist</directory>
+                    </fileset>
+                  </filesets>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- jpackage copies its whole input directory, so stage only the fat jar there. -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>stage-app-input</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/app-input</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${project.build.directory}</directory>
+                      <includes>
+                        <include>${project.build.finalName}.jar</include>
+                      </includes>
+                      <filtering>false</filtering>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>jpackage-app-image</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${java.home}/bin/jpackage</executable>
+                  <arguments>
+                    <argument>--type</argument>
+                    <argument>app-image</argument>
+                    <argument>--name</argument>
+                    <argument>HospiSoft</argument>
+                    <argument>--app-version</argument>
+                    <argument>${project.version}</argument>
+                    <argument>--input</argument>
+                    <argument>${project.build.directory}/app-input</argument>
+                    <argument>--main-jar</argument>
+                    <argument>${project.build.finalName}.jar</argument>
+                    <argument>--main-class</argument>
+                    <argument>${main.class}</argument>
+                    <argument>--java-options</argument>
+                    <argument>-Dfile.encoding=UTF-8</argument>
+                    <!--
+                      Without this, jpackage links every JDK module into the image. These are the
+                      ones the application really needs: java.sql and java.naming for the
+                      PostgreSQL driver, jdk.crypto.ec for the TLS handshake against Supabase,
+                      java.desktop and jdk.jsobject for JavaFX and the WebView bridge,
+                      jdk.unsupported for the internal access JavaFX still performs.
+                    -->
+                    <argument>--add-modules</argument>
+                    <argument>java.base,java.datatransfer,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.security.sasl,java.sql,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.jsobject,jdk.unsupported</argument>
+                    <argument>--dest</argument>
+                    <argument>${project.build.directory}/dist</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
+  <!--
+    An .msi or .exe installer needs WiX or Inno Setup installed on the machine; the app-image
+    profile above is the dependency-free option. To build an installer once WiX is available,
+    change the jpackage type argument from app-image to msi and add the win-shortcut and
+    win-menu flags.
+  -->
+</project>
