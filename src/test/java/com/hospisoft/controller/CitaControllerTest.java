@@ -16,6 +16,7 @@ import com.hospisoft.model.Medico;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AppZone;
+import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.CitaService;
 import com.hospisoft.service.SessionContext;
@@ -68,7 +69,7 @@ class CitaControllerTest {
         citas.add(new Cita(1L, 10L, 20L, ZONE.at(TODAY, LocalTime.of(9, 0)), "Control", EstadoCita.PROGRAMADA, null, null, null));
         citas.add(new Cita(2L, 11L, 21L, ZONE.at(TODAY.plusDays(1), LocalTime.of(10, 0)), "Vacuna", EstadoCita.PROGRAMADA, null, null, null));
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        service = new CitaService(citas, medicos, pacientes, sessions::current, CLOCK, ZONE);
+        service = new CitaService(citas, medicos, pacientes, sessions::current, CLOCK, ZONE, AuditLog.NONE);
         new CitaController(service).register(bridge);
         sessions.set(ADMIN);
     }

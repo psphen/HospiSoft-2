@@ -10,6 +10,7 @@ import com.hospisoft.dao.InMemoryMedicoRepository;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.model.Medico;
 import com.hospisoft.model.Rol;
+import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.MedicoService;
 import com.hospisoft.service.SessionContext;
@@ -61,7 +62,7 @@ class MedicoControllerTest {
         }
 
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, sink);
-        service = new MedicoService(medicos, sessions::current);
+        service = new MedicoService(medicos, sessions::current, AuditLog.NONE);
         new MedicoController(service).register(bridge);
         sessions.set(ADMIN);
     }

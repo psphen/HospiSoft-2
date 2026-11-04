@@ -46,6 +46,7 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
     /** When true, every decrementStock reports 0 affected rows (simulates a broken invariant). */
     public boolean failDecrementStock;
     private int recetaInsertCount;
+    private boolean transactionOpen;
 
     public InMemoryAtencionRepository(InMemoryCitaRepository citas, InMemoryMedicoRepository medicos,
                                       InMemoryPacienteRepository pacientes,
@@ -80,6 +81,7 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
         List<Medicamento> medicamentosBefore = medicamentos.allRows();
         List<Cita> citasBefore = citas.snapshot();
         recetaInsertCount = 0;
+        transactionOpen = true;
         try {
             return work.apply(new Tx());
         } catch (RuntimeException | Error ex) {
@@ -90,7 +92,14 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
             medicamentosBefore.forEach(medicamentos::replace);
             citas.restore(citasBefore);
             throw ex;
+        } finally {
+            transactionOpen = false;
         }
+    }
+
+    /** True while a transaction body runs (lets tests prove side effects happen after the commit). */
+    public boolean transactionOpen() {
+        return transactionOpen;
     }
 
     private final class Tx implements AtencionTx {

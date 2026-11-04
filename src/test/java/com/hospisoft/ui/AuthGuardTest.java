@@ -29,9 +29,18 @@ class AuthGuardTest {
 
     @Test
     void adminMayOpenEveryPage() {
-        for (String page : new String[] {"index.html", "medicos.html", "pacientes.html", "citas.html", "medicamentos.html"}) {
+        for (String page : new String[] {"index.html", "medicos.html", "pacientes.html", "citas.html", "medicamentos.html",
+            "auditoria.html"}) {
             assertEquals(page, AuthGuard.resolve(page, Rol.ADMIN));
         }
+    }
+
+    @Test
+    void onlyAdminMayOpenTheAuditLog() {
+        assertEquals("index.html", AuthGuard.resolve("auditoria.html", Rol.MEDICO));
+        assertEquals("index.html", AuthGuard.resolve("auditoria.html", Rol.PACIENTE));
+        assertEquals("login.html", AuthGuard.resolve("auditoria.html", null));
+        assertTrue(AuthGuard.isLocal(BASE + "auditoria.html", BASE));
     }
 
     @Test

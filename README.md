@@ -1,6 +1,6 @@
 # HospiSoft
 
-Aplicación de escritorio para la gestión de un consultorio médico: usuarios, médicos, pacientes, citas, atención, historias clínicas, recetas y medicamentos.
+Aplicación de escritorio para la gestión de un consultorio médico: usuarios, médicos, pacientes, citas, atención, historias clínicas, recetas, medicamentos y auditoría.
 
 - **Interfaz**: JavaFX `WebView` que muestra las páginas HTML del proyecto (Bootstrap 5 y Font Awesome empaquetados dentro del jar). Sin servidor web y sin navegador externo.
 - **Lógica de negocio**: Java 21. El JavaScript de las páginas solo llama al puente y actualiza el DOM.
@@ -27,8 +27,28 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 ## 2. Base de datos
 
 1. Abra el proyecto en Supabase → **SQL Editor** → *New query*.
-2. Pegue el contenido completo de [`db/schema.sql`](db/schema.sql) y ejecútelo. El script es idempotente: crea las 7 tablas, los índices, los triggers de inmutabilidad, habilita RLS y carga los datos de prueba.
+2. Pegue el contenido completo de [`db/schema.sql`](db/schema.sql) y ejecútelo. El script es idempotente: crea las 8 tablas (las 7 del dominio más `auditoria`), los índices, los triggers de inmutabilidad, habilita RLS y carga los datos de prueba.
 3. La aplicación **nunca** crea el esquema. Al iniciar solo verifica que las tablas existan y, si faltan, lo informa en la pantalla de inicio de sesión.
+
+> **Bases creadas antes de la auditoría**: si su base ya existía, **vuelva a ejecutar `db/schema.sql` completo** en el SQL Editor de Supabase. Solo agrega la tabla `auditoria`, sus índices y su trigger; no toca las tablas ni los datos existentes. Hasta hacerlo, la pantalla de inicio de sesión informa que falta la tabla `auditoria`.
+
+### Tabla `auditoria`
+
+Registro de **solo inserción** de quién hizo qué y cuándo:
+
+| Columna | Tipo | Contenido |
+| --- | --- | --- |
+| `id` | `BIGSERIAL` | clave primaria |
+| `fecha` | `TIMESTAMPTZ` | la asigna la base (`DEFAULT now()`) |
+| `id_usuario`, `username`, `rol` | `BIGINT`, `VARCHAR(60)`, `VARCHAR(10)` | copia del usuario de la sesión; en un ingreso fallido solo queda el `username`, y únicamente si corresponde a una cuenta existente |
+| `accion` | `VARCHAR(20)` | `CREAR`, `EDITAR`, `ELIMINAR`, `DESACTIVAR`, `REPROGRAMAR`, `CANCELAR`, `INICIAR_ATENCION`, `FINALIZAR_ATENCION`, `LOGIN`, `LOGIN_FALLIDO`, `LOGOUT` |
+| `modulo` | `VARCHAR(30)` | `PACIENTE`, `MEDICO`, `MEDICAMENTO`, `CITA`, `ATENCION`, `SESION` |
+| `id_registro` | `BIGINT` | id de la fila afectada (cuando aplica) |
+| `detalle` | `VARCHAR(500)` | texto breve, p. ej. `Cita #12 reprogramada a 2026-11-05 10:00 - …` |
+
+- Los datos del usuario son una **instantánea sin clave foránea**: el registro sobrevive aunque el usuario se elimine.
+- Un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`, igual que en `historia_clinica` y `receta`. Las acciones y módulos están restringidos con `CHECK`.
+- Nunca se guarda la contraseña. Si el usuario escrito no existe (por ejemplo, alguien tecleó su contraseña en el campo de usuario), el registro queda con `username` vacío y el detalle `Usuario inexistente`: el texto ingresado no se almacena. La escritura es de mejor esfuerzo: si falla, la operación del usuario sigue su curso y el error se informa en la consola sin datos de la fila.
 
 **Cadena de conexión**: Supabase → *Connect* → **Session pooler** (puerto **5432**). Se ve así:
 
@@ -150,20 +170,25 @@ Las contraseñas se almacenan con PBKDF2WithHmacSHA256, 600 000 iteraciones, sal
 src/main/java/com/hospisoft/
 ├── ui/        Launcher (main sin JavaFX), MainApp (Stage + WebView), PageRouter, AuthGuard
 ├── bridge/    JsApi (lo único visible para JS), Bridge (front controller), Json, Payload, Dtos
-├── controller/ Controladores MVC por módulo: Paciente, Medico, Cita, Medicamento, Atencion, Dashboard
+├── controller/ Controladores MVC por módulo: Paciente, Medico, Cita, Medicamento, Atencion, Dashboard,
+│              Auditoria
 ├── config/    AppConfig (lectura de config.properties)
 ├── db/        ConnectionPool (pool propio), SchemaChecker, SqlErrorClassifier, excepciones
 ├── security/  PasswordHasher
-├── model/     Usuario, Medico, Paciente, Cita, Medicamento, HistoriaClinica, Receta, vistas y enums
+├── model/     Usuario, Medico, Paciente, Cita, Medicamento, HistoriaClinica, Receta, Auditoria,
+│              vistas y enums (AccionAuditoria, ModuloAuditoria con etiquetas en español)
 ├── dao/       Repositorios (interfaces) y DAOs JDBC: Usuario, Medico, Paciente, Medicamento,
-│              Cita, Atencion, Dashboard
+│              Cita, Atencion, Dashboard, Auditoria
 └── service/   AuthService, PageAccess, MedicoService, PacienteService, MedicamentoService,
-               CitaService, AtencionService, DashboardService, AppZone, validación y excepciones
+               CitaService, AtencionService, DashboardService, AuditoriaService (implementa el
+               puerto AuditLog), AppZone, validación y excepciones
 src/main/resources/web/   páginas HTML, css/, js/ y vendor/ (Bootstrap y Font Awesome)
 db/schema.sql             esquema y datos de prueba para Supabase
 ```
 
 Capas: `ui` → `bridge` → `service` → `dao` → `db`; `model` es compartido. Los DAOs usan tipos de excepción del paquete `service` para que un error de la base llegue a la interfaz ya traducido.
+
+**Auditoría**: los servicios reciben por constructor el puerto `AuditLog` (en producción, una única instancia de `AuditoriaService` creada en `MainApp`) y lo invocan **solo después** de que la operación tuvo éxito; en citas y atención, después del *commit* de la transacción, nunca dentro de ella. `AuthService` registra `LOGIN` y `LOGIN_FALLIDO` y `Bridge.logout` registra `LOGOUT` con la sesión que termina, en el hilo del puente para no bloquear la interfaz.
 
 ### Contrato del puente
 
@@ -196,6 +221,7 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 | `finalizarAtencion` | `{"idCita","diagnostico","tratamiento","notas","observaciones","recetas":[…]}` | `{idHistoria, cita, recetas}` |
 | `getHistoriaCita` / `historialPaciente` / `misRecetas` | `{"idCita"}` / `{"idPaciente","page","pageSize"}` / `{"page","pageSize"}` | historia / página de historias / página de recetas |
 | `dashboard` | — | `{rol, kpis, proximasCitas, resumenHoy, atendidasPct, duracionPromedioMin}` |
+| `listAuditoria` (ADMIN) | `{"filter":{"texto","accion","modulo","desde","hasta"},"page","pageSize"}` | página de `{id, fecha, fechaHora, idUsuario, username, rol, accion, accionLabel, modulo, moduloLabel, idRegistro, detalle}`, la más reciente primero |
 
 ---
 
@@ -204,7 +230,7 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 **Acceso y navegación**
 
 - La guardia de navegación vive en Java: sin sesión toda página redirige a `login.html`; con sesión, `login.html` va a `index.html`; una página no permitida para el rol va a `index.html`; cualquier ubicación fuera de la carpeta `web/` del classpath se bloquea y el puente nunca se inyecta en ella *(fase 1)*.
-- Permisos por página: ADMIN todas; MEDICO Dashboard, Pacientes, Citas y Medicamentos; PACIENTE Dashboard, Citas y Medicamentos. Ocultar enlaces es solo cosmético; el servicio decide *(fase 1)*.
+- Permisos por página: ADMIN todas (incluida Auditoría); MEDICO Dashboard, Pacientes, Citas y Medicamentos; PACIENTE Dashboard, Citas y Medicamentos. Ocultar enlaces es solo cosmético; el servicio decide *(fase 1)*.
 - Un médico o paciente dado de baja no puede iniciar sesión aunque su cuenta siga activa *(fase 1)*.
 
 **Médicos y pacientes**
@@ -234,6 +260,12 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 - La historia clínica y sus recetas son inmutables: los triggers de la base rechazan `UPDATE`, `DELETE` y `TRUNCATE`, y hay una sola historia por cita *(fase 5)*.
 - Un médico consulta únicamente las historias que él mismo escribió; el paciente ve su expediente completo; el administrador ve todo *(fase 5)*.
 
+**Auditoría**
+
+- Se registran, solo cuando tienen éxito: crear/editar/eliminar/dar de baja pacientes, médicos y medicamentos (`CREAR` o `EDITAR` según sea alta o modificación; `ELIMINAR` o `DESACTIVAR` según el resultado del borrado), crear/reprogramar/cancelar citas, iniciar/finalizar atenciones, y los ingresos (`LOGIN`), ingresos fallidos por credenciales o bloqueo (`LOGIN_FALLIDO`, con el usuario solo si la cuenta existe) y salidas (`LOGOUT`).
+- Una falla al escribir la auditoría **nunca** hace fallar ni revierte la operación del usuario.
+- La página `auditoria.html` es de solo lectura y exclusiva del ADMIN; filtra por texto (usuario o detalle), acción, módulo y rango de fechas (días locales, ambos inclusive).
+
 **Tablero**
 
 - Cada cifra se calcula según el rol de la sesión, "hoy" es el día local de la máquina donde corre la aplicación (su zona horaria, no la del servidor de base de datos) y las métricas de cierre (porcentaje de atendidas y duración promedio) salen de `hora_inicio_real` y `hora_fin_real`; si no hay datos se muestra un guion *(fase 6)*.
@@ -245,10 +277,10 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 ## 9. Pruebas
 
 ```powershell
-.\mvnw.cmd clean package      # compila y ejecuta las 356 pruebas (JUnit 5)
+.\mvnw.cmd clean package      # compila y ejecuta las 471 pruebas (JUnit 5)
 ```
 
-9 de esas pruebas son de integración y se **omiten** salvo que existan las tres variables de entorno siguientes. Cada una corre dentro de una transacción que se revierte, y el caso que sí confirma datos los borra al terminar, así que no dejan rastro:
+10 de esas pruebas son de integración y se **omiten** salvo que existan las tres variables de entorno siguientes. Cada una corre dentro de una transacción que se revierte, y el caso que sí confirma datos los borra al terminar, así que no dejan rastro:
 
 ```powershell
 $env:HOSPISOFT_TEST_DB_URL = "jdbc:postgresql://aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require"
@@ -257,7 +289,7 @@ $env:HOSPISOFT_TEST_DB_PASSWORD = "..."
 .\mvnw.cmd test -Dtest=PostgresIntegrationTest
 ```
 
-Cubren: existencia de las 7 tablas, los límites del predicado de solapamiento, los bloqueos `FOR NO KEY UPDATE`, los triggers de inmutabilidad de `historia_clinica` y `receta`, la guarda del descuento de stock, un cierre de atención completo contra el DAO real y el tablero (su SQL es el único que se arma en tiempo de ejecución, así que se ejecutan las tres variantes de alcance: global, médico y paciente).
+Cubren: existencia de las tablas requeridas, los límites del predicado de solapamiento, los bloqueos `FOR NO KEY UPDATE`, los triggers de inmutabilidad de `historia_clinica`, `receta` y `auditoria`, la guarda del descuento de stock, un cierre de atención completo contra el DAO real y el tablero (su SQL es el único que se arma en tiempo de ejecución, así que se ejecutan las tres variantes de alcance: global, médico y paciente).
 
 La cobertura de integración es **parcial**: verifica que el SQL se ejecute y respete las reglas críticas, no que cada pantalla devuelva las cifras correctas con datos de producción. Eso se valida a mano contra una base real.
 
@@ -268,7 +300,8 @@ La cobertura de integración es **parcial**: verifica que el SQL se ejecute y re
 - **Credenciales del propietario en el cliente**: el escritorio guarda en `config.properties` las credenciales del rol `postgres`, dueño de la base. Quien tenga ese archivo tiene control total sobre los datos. Por eso **nunca** se distribuye ni se comprime la carpeta `target\dist\HospiSoft\` con un `config.properties` adentro: cada equipo recibe la imagen vacía y pone su propio archivo al lado del ejecutable.
 - **RLS eludida**: todas las tablas tienen Row Level Security habilitado y políticas de ejemplo documentadas, pero el rol `postgres` las omite por ser propietario (no se usa `FORCE ROW LEVEL SECURITY`). Los permisos se aplican en Java. Un rol de base de datos con privilegios mínimos queda pendiente.
 - **Credenciales semilla**: las cuentas de `db/schema.sql` son de desarrollo; hay que cambiarlas antes de usar datos reales.
-- **Sin auditoría de accesos**: no se registra quién consultó una historia clínica. La inmutabilidad protege contra modificaciones, no contra lecturas indebidas.
+- **Auditoría solo de escrituras**: la tabla `auditoria` registra las modificaciones y las sesiones, pero no quién **consultó** una historia clínica. La inmutabilidad protege contra modificaciones, no contra lecturas indebidas.
+- **Auditoría de mejor esfuerzo**: si la escritura del registro falla (por ejemplo, la base se cae justo después de la operación), la operación queda hecha y el registro se pierde; solo queda la línea en la consola.
 - **TLS**: `sslmode=require` cifra pero no valida el certificado del servidor; la opción endurecida es `sslmode=verify-full` con `sslrootcert`.
 - **Natives de JavaFX solo para Windows**: el jar ejecutable incluye los binarios nativos de Windows; en otro sistema operativo hay que reconstruir. La *app-image* es igualmente específica de la plataforma donde se genera.
 
@@ -284,6 +317,7 @@ La cobertura de integración es **parcial**: verifica que el SQL se ejecute y re
 | 4 | Citas y agenda (solapamiento, reprogramación, cancelación) | Completa |
 | 5 | Atención: iniciar/finalizar, historia clínica inmutable y recetas con descuento de stock | Completa |
 | 6 | Tablero con datos reales y empaquetado ejecutable (`jpackage`) | Completa |
+| 7 | Auditoría: registro inmutable de quién hizo qué y cuándo, con página de consulta para ADMIN | Completa |
 
 ---
 

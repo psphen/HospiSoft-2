@@ -41,7 +41,7 @@ class DaoSchemaConsistencyTest {
         "medico_nombres", "medico_apellidos", "paciente_nombres", "paciente_apellidos", "paciente_documento");
 
     /** Table aliases used in the joins. */
-    private static final Set<String> ALIASES = Set.of("md", "r", "h", "c", "m", "p", "u");
+    private static final Set<String> ALIASES = Set.of("md", "r", "h", "c", "m", "p", "u", "a");
 
     /** Only constants that really are SQL are scanned (messages and constraint names are not). */
     private static boolean looksLikeSql(String value) {
@@ -84,7 +84,8 @@ class DaoSchemaConsistencyTest {
     void daoIdentifiersExistInTheSchema() throws Exception {
         Set<String> known = schemaColumns();
         List<String> unknown = new ArrayList<>();
-        for (Class<?> dao : List.of(MedicoDao.class, PacienteDao.class, MedicamentoDao.class, CitaDao.class, AtencionDao.class, DashboardDao.class, UsuarioDao.class)) {
+        for (Class<?> dao : List.of(MedicoDao.class, PacienteDao.class, MedicamentoDao.class, CitaDao.class, AtencionDao.class, DashboardDao.class, UsuarioDao.class,
+            AuditoriaDao.class)) {
             for (String sql : sqlConstants(dao)) {
                 String text = QUOTED.matcher(sql).replaceAll(" ").toLowerCase(Locale.ROOT);
                 Matcher m = IDENTIFIER.matcher(text);

@@ -5,10 +5,12 @@ import com.hospisoft.dao.CitaRepository;
 import com.hospisoft.dao.HistoriaQuery;
 import com.hospisoft.dao.MedicamentoRepository;
 import com.hospisoft.dao.PacienteRepository;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.CitaView;
 import com.hospisoft.model.EstadoCita;
 import com.hospisoft.model.HistoriaView;
 import com.hospisoft.model.Medicamento;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.RecetaView;
 import com.hospisoft.model.Rol;
@@ -34,7 +36,8 @@ import java.util.function.Supplier;
  * requires {@code observacionNoDisponible}.
  *
  * <p>The historia is immutable (database triggers reject UPDATE/DELETE/TRUNCATE) and there is at
- * most one per cita: a second closing surfaces as CONFLICT.
+ * most one per cita: a second closing surfaces as CONFLICT. Starting and closing are recorded in the
+ * audit log after the commit (never inside the transaction, so an audit failure cannot roll it back).
  *
  * <p>Reads: ADMIN sees everything; MEDICO the historial of its own patients (a non-cancelled cita
  * with them); PACIENTE only its own historias and recetas. Out-of-scope reads answer NOT_FOUND.
@@ -75,10 +78,11 @@ public final class AtencionService {
     private final Access access;
     private final Clock clock;
     private final AppZone zone;
+    private final AuditLog audit;
 
     public AtencionService(AtencionRepository atenciones, CitaRepository citas, MedicamentoRepository medicamentos,
                            PacienteRepository pacientes, Supplier<Optional<SessionContext>> session,
-                           Clock clock, AppZone zone) {
+                           Clock clock, AppZone zone, AuditLog audit) {
         this.atenciones = atenciones;
         this.citas = citas;
         this.medicamentos = medicamentos;
@@ -86,6 +90,7 @@ public final class AtencionService {
         this.access = new Access(session);
         this.clock = clock;
         this.zone = zone;
+        this.audit = audit;
     }
 
     public AppZone zone() {
@@ -98,6 +103,11 @@ public final class AtencionService {
     public CitaView iniciar(long idCita) {
         SessionContext current = access.require(Rol.MEDICO);
         long idMedico = referenceOf(current);
+        // read before the transaction only for the audit text; the transaction decides existence and scope
+        String paciente = citas.findById(idCita)
+            .filter(view -> view.cita().idMedico() == idMedico)
+            .map(view -> " - " + view.pacienteNombre())
+            .orElse("");
         atenciones.inTransaction(tx -> {
             requireActiveMedico(tx.lockMedico(idMedico));
             if (tx.existsEnCurso(idMedico, idCita)) {
@@ -108,6 +118,9 @@ public final class AtencionService {
             }
             return null;
         });
+        // committed: audit BEFORE the reload, from data already in hand, so a failed read cannot hide the write
+        audit.record(AccionAuditoria.INICIAR_ATENCION, ModuloAuditoria.ATENCION, idCita,
+            "Atención iniciada - cita #" + idCita + paciente);
         return reloadCita(idCita);
     }
 
@@ -127,7 +140,7 @@ public final class AtencionService {
         }
         long idPaciente = cita.cita().idPaciente();
 
-        long idHistoria = atenciones.inTransaction(tx -> {
+        Closed closed = atenciones.inTransaction(tx -> {
             requireActiveMedico(tx.lockMedico(idMedico));
             Map<Long, AtencionRepository.MedicamentoLock> locked = lockMedicamentos(tx, clean.lines);
             List<Delivery> deliveries = decideDeliveries(clean.lines, locked);
@@ -146,8 +159,16 @@ public final class AtencionService {
                 tx.insertReceta(historia, delivery.line.idMedicamento, delivery.line.cantidad, delivery.line.dosis,
                     delivery.line.duracion, delivery.deliver, delivery.deliver ? null : delivery.observacion);
             }
-            return historia;
+            int undelivered = (int) deliveries.stream().filter(d -> !d.deliver).count();
+            return new Closed(historia, deliveries.size(), undelivered);
         });
+        long idHistoria = closed.idHistoria;
+        // committed: audit BEFORE the reloads, from data already in hand, so a failed read cannot hide the write
+        audit.record(AccionAuditoria.FINALIZAR_ATENCION, ModuloAuditoria.ATENCION, idCita,
+            "Atención finalizada - cita #" + idCita + " - " + cita.pacienteNombre() + " - historia #" + idHistoria
+                + " - " + (closed.lines == 0
+                    ? "sin medicamentos"
+                    : closed.lines + " medicamento(s), " + closed.undelivered + " sin entregar"));
 
         HistoriaView stored = atenciones.findHistoriaById(idHistoria)
             .orElseThrow(() -> new NotFoundException("Historia " + idHistoria + " not found"));
@@ -218,6 +239,10 @@ public final class AtencionService {
     }
 
     private record Delivery(Line line, boolean deliver, String observacion) {
+    }
+
+    /** What the closing transaction committed, for the audit text. */
+    private record Closed(long idHistoria, int lines, int undelivered) {
     }
 
     private CitaView reloadCita(long idCita) {

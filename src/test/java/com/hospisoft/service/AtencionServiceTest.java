@@ -11,7 +11,10 @@ import com.hospisoft.dao.InMemoryCitaRepository;
 import com.hospisoft.dao.InMemoryMedicamentoRepository;
 import com.hospisoft.dao.InMemoryMedicoRepository;
 import com.hospisoft.dao.InMemoryPacienteRepository;
+import com.hospisoft.db.DatabaseUnavailableException;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.Cita;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.CitaView;
 import com.hospisoft.model.EstadoCita;
 import com.hospisoft.model.HistoriaView;
@@ -52,6 +55,7 @@ class AtencionServiceTest {
     private InMemoryCitaRepository citas;
     private InMemoryAtencionRepository atenciones;
     private SessionContext current;
+    private RecordingAuditLog audit;
     private AtencionService service;
 
     private static AtencionInput.RecetaInput line(long idMedicamento, Object cantidad, String observacion) {
@@ -84,8 +88,63 @@ class AtencionServiceTest {
             null, ZONE.at(TODAY.minusDays(3), LocalTime.of(9, 25)), null));
         atenciones = new InMemoryAtencionRepository(citas, medicos, pacientes, medicamentos);
         current = GARCIA;
+        audit = new RecordingAuditLog();
+        audit.onRecord(() -> assertFalse(atenciones.transactionOpen(), "audit must be written after the commit"));
         service = new AtencionService(atenciones, citas, medicamentos, pacientes,
-            () -> Optional.ofNullable(current), CLOCK, ZONE);
+            () -> Optional.ofNullable(current), CLOCK, ZONE, audit);
+    }
+
+    // ------------------------------------------------------------ audit
+
+    @Test
+    void lifecycleIsAuditedAfterEachCommit() {
+        Atencion closed = service.finalizar(closing(2, line(5, 9, null), line(6, 5, "Sin existencias")));
+        RecordingAuditLog.Entry finalizar = audit.only();
+        assertEquals(AccionAuditoria.FINALIZAR_ATENCION, finalizar.accion());
+        assertEquals(ModuloAuditoria.ATENCION, finalizar.modulo());
+        assertEquals(2L, finalizar.idRegistro());
+        assertEquals("Atención finalizada - cita #2 - Juan Martinez - historia #" + closed.idHistoria()
+            + " - 2 medicamento(s), 1 sin entregar", finalizar.detalle());
+        audit.clear();
+
+        service.iniciar(1);
+        RecordingAuditLog.Entry iniciar = audit.only();
+        assertEquals(AccionAuditoria.INICIAR_ATENCION, iniciar.accion());
+        assertEquals(1L, iniciar.idRegistro());
+        assertEquals("Atención iniciada - cita #1 - Maria Torres", iniciar.detalle());
+        audit.clear();
+
+        service.finalizar(closing(1));
+        assertTrue(audit.only().detalle().endsWith(" - sin medicamentos"), audit.only().detalle());
+    }
+
+    @Test
+    void iniciarIsAuditedEvenWhenTheReloadFails() {
+        service.finalizar(closing(2));
+        audit.clear();
+        citas.failReadsWhen(() -> citas.raw(1).estado() == EstadoCita.EN_CURSO);
+        assertThrows(DatabaseUnavailableException.class, () -> service.iniciar(1));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.INICIAR_ATENCION, entry.accion());
+        assertEquals(1L, entry.idRegistro());
+        assertEquals("Atención iniciada - cita #1 - Maria Torres", entry.detalle());
+    }
+
+    @Test
+    void finalizarIsAuditedEvenWhenTheReloadFails() {
+        citas.failReadsWhen(() -> citas.raw(2).estado() == EstadoCita.FINALIZADA);
+        assertThrows(DatabaseUnavailableException.class, () -> service.finalizar(closing(2, line(5, 1, null))));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.FINALIZAR_ATENCION, entry.accion());
+        assertEquals(2L, entry.idRegistro());
+    }
+
+    @Test
+    void aRolledBackClosingIsNotAudited() {
+        atenciones.failOnRecetaInsert = 0;
+        assertThrows(RuntimeException.class, () -> service.finalizar(closing(2, line(5, 1, null))));
+        assertThrows(ValidationException.class, () -> service.iniciar(1)); // cita 2 still EN_CURSO
+        assertTrue(audit.entries().isEmpty(), "only committed work is audited: " + audit.entries());
     }
 
     private ValidationException invalidClose(AtencionInput input) {

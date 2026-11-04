@@ -9,6 +9,7 @@ import com.hospisoft.dao.InMemoryMedicamentoRepository;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.model.Medicamento;
 import com.hospisoft.model.Rol;
+import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.ConflictException;
 import com.hospisoft.service.MedicamentoService;
@@ -46,13 +47,14 @@ class MedicamentoControllerTest {
         repository.add(new Medicamento(2L, "MED-002", "Ibuprofeno", null, "Caja x 10", 25, 30, true));
         repository.add(new Medicamento(3L, "MED-005", "Loratadina", null, "Caja x 10", 0, 15, false));
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        new MedicamentoController(new MedicamentoService(repository, sessions::current)).register(bridge);
+        new MedicamentoController(new MedicamentoService(repository, sessions::current, AuditLog.NONE)).register(bridge);
         sessions.set(ADMIN);
     }
 
     @Test
     void registersExactlyTheMedicamentoMethods() {
-        MedicamentoController controller = new MedicamentoController(new MedicamentoService(repository, sessions::current));
+        MedicamentoController controller = new MedicamentoController(
+            new MedicamentoService(repository, sessions::current, AuditLog.NONE));
         assertEquals(Set.of("listMedicamentos", "getMedicamento", "saveMedicamento", "deleteMedicamento"),
             ControllerTestSupport.registeredNames(controller));
     }

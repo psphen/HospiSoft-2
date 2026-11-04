@@ -15,14 +15,18 @@ public final class PageAccess {
     public static final String LOGIN_PAGE = "login.html";
     public static final String HOME_PAGE = "index.html";
 
+    /** The audit log: read-only and ADMIN only. */
+    public static final String AUDITORIA_PAGE = "auditoria.html";
+
     /** Every page shipped in the classpath web/ folder, in sidebar order. */
     public static final List<String> PAGES = List.of(
-        LOGIN_PAGE, HOME_PAGE, "medicos.html", "pacientes.html", "citas.html", "medicamentos.html");
+        LOGIN_PAGE, HOME_PAGE, "medicos.html", "pacientes.html", "citas.html", "medicamentos.html", AUDITORIA_PAGE);
 
     private static final Map<Rol, List<String>> ROLE_PAGES = new EnumMap<>(Rol.class);
 
     static {
-        ROLE_PAGES.put(Rol.ADMIN, List.of(HOME_PAGE, "medicos.html", "pacientes.html", "citas.html", "medicamentos.html"));
+        ROLE_PAGES.put(Rol.ADMIN, List.of(HOME_PAGE, "medicos.html", "pacientes.html", "citas.html", "medicamentos.html",
+            AUDITORIA_PAGE));
         ROLE_PAGES.put(Rol.MEDICO, List.of(HOME_PAGE, "pacientes.html", "citas.html", "medicamentos.html"));
         ROLE_PAGES.put(Rol.PACIENTE, List.of(HOME_PAGE, "citas.html", "medicamentos.html"));
     }

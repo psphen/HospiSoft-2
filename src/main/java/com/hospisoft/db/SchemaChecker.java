@@ -13,8 +13,9 @@ import java.util.Set;
  */
 public final class SchemaChecker {
 
+    /** The seven domain tables plus the audit log, in db/schema.sql order. */
     public static final List<String> REQUIRED_TABLES = List.of(
-        "usuario", "medico", "paciente", "cita", "medicamento", "historia_clinica", "receta");
+        "usuario", "medico", "paciente", "cita", "medicamento", "historia_clinica", "receta", "auditoria");
 
     private static final String SQL =
         "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";

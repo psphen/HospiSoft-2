@@ -3,6 +3,8 @@ package com.hospisoft.service;
 import com.hospisoft.dao.HasHistoryException;
 import com.hospisoft.dao.PacienteFilter;
 import com.hospisoft.dao.PacienteRepository;
+import com.hospisoft.model.AccionAuditoria;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.Rol;
@@ -16,7 +18,8 @@ import java.util.function.Supplier;
 /**
  * Paciente use cases. ADMIN has full CRUD; MEDICO may only read the patients it has attended
  * (at least one non-cancelled cita) and gets NOT_FOUND, never FORBIDDEN, for anything out of
- * scope so it cannot probe which ids exist; PACIENTE has no access in this phase.
+ * scope so it cannot probe which ids exist; PACIENTE has no access in this phase. Every successful
+ * write is recorded in the audit log (CREAR, EDITAR, ELIMINAR or DESACTIVAR).
  */
 public final class PacienteService {
 
@@ -33,18 +36,23 @@ public final class PacienteService {
     static final String BIRTH_DATE_TOO_OLD = "La fecha de nacimiento no puede ser anterior a 1900";
     static final String INVALID_SEXO = "Valor inválido (M, F u OTRO)";
 
+    static final String HAS_HISTORY_SUFFIX = " (tiene historial asociado)";
+
     private final PacienteRepository pacientes;
     private final Access access;
     private final Clock clock;
+    private final AuditLog audit;
 
-    public PacienteService(PacienteRepository pacientes, Supplier<Optional<SessionContext>> session) {
-        this(pacientes, session, Clock.systemDefaultZone());
+    public PacienteService(PacienteRepository pacientes, Supplier<Optional<SessionContext>> session, AuditLog audit) {
+        this(pacientes, session, Clock.systemDefaultZone(), audit);
     }
 
-    public PacienteService(PacienteRepository pacientes, Supplier<Optional<SessionContext>> session, Clock clock) {
+    public PacienteService(PacienteRepository pacientes, Supplier<Optional<SessionContext>> session, Clock clock,
+                           AuditLog audit) {
         this.pacientes = pacientes;
         this.access = new Access(session);
         this.clock = clock;
+        this.audit = audit;
     }
 
     public LocalDate today() {
@@ -85,7 +93,9 @@ public final class PacienteService {
             clean = withActivo(clean, activo == null || activo);
             validate(clean);
             long id = pacientes.insert(clean);
-            return withId(clean, id);
+            Paciente created = withId(clean, id);
+            audit.record(AccionAuditoria.CREAR, ModuloAuditoria.PACIENTE, id, detalle(created));
+            return created;
         }
         long id = clean.id();
         Paciente stored = pacientes.findById(id)
@@ -93,12 +103,24 @@ public final class PacienteService {
         clean = withActivo(clean, activo == null ? stored.activo() : activo);
         validate(clean);
         pacientes.update(clean);
+        audit.record(AccionAuditoria.EDITAR, ModuloAuditoria.PACIENTE, id, detalle(clean));
         return clean;
     }
 
     public DeleteOutcome delete(long id) {
         access.require(Rol.ADMIN);
-        pacientes.findById(id).orElseThrow(() -> new NotFoundException("Paciente " + id + " not found"));
+        Paciente found = pacientes.findById(id)
+            .orElseThrow(() -> new NotFoundException("Paciente " + id + " not found"));
+        DeleteOutcome outcome = deleteOrDeactivate(id);
+        if (outcome == DeleteOutcome.DELETED) {
+            audit.record(AccionAuditoria.ELIMINAR, ModuloAuditoria.PACIENTE, id, detalle(found));
+        } else {
+            audit.record(AccionAuditoria.DESACTIVAR, ModuloAuditoria.PACIENTE, id, detalle(found) + HAS_HISTORY_SUFFIX);
+        }
+        return outcome;
+    }
+
+    private DeleteOutcome deleteOrDeactivate(long id) {
         if (pacientes.hasAssociatedHistory(id)) {
             pacientes.setActivo(id, false);
             return DeleteOutcome.DEACTIVATED;
@@ -111,6 +133,11 @@ public final class PacienteService {
             pacientes.setActivo(id, false);
             return DeleteOutcome.DEACTIVATED;
         }
+    }
+
+    /** Audit text, e.g. "Paciente 1234567890 - María Torres". */
+    private static String detalle(Paciente p) {
+        return "Paciente " + p.documento() + " - " + p.nombres() + " " + p.apellidos();
     }
 
     private static long medicoIdOf(SessionContext session) {

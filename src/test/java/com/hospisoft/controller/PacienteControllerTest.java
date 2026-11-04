@@ -9,6 +9,7 @@ import com.hospisoft.dao.InMemoryPacienteRepository;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Rol;
+import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.PacienteService;
 import com.hospisoft.service.SessionContext;
@@ -54,7 +55,7 @@ class PacienteControllerTest {
         pacientes.markAttended(20L, 10L);
 
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        service = new PacienteService(pacientes, sessions::current, CLOCK);
+        service = new PacienteService(pacientes, sessions::current, CLOCK, AuditLog.NONE);
         new PacienteController(service).register(bridge);
         sessions.set(ADMIN);
     }

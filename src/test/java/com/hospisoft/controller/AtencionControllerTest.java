@@ -21,6 +21,7 @@ import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AppZone;
 import com.hospisoft.service.AtencionService;
+import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
@@ -75,7 +76,8 @@ class AtencionControllerTest {
         citas.add(new Cita(1L, 10L, 21L, ZONE.at(TODAY, LocalTime.of(9, 0)), "Control", EstadoCita.PROGRAMADA, null, null, null));
         InMemoryAtencionRepository atenciones = new InMemoryAtencionRepository(citas, medicos, pacientes, medicamentos);
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        service = new AtencionService(atenciones, citas, medicamentos, pacientes, sessions::current, CLOCK, ZONE);
+        service = new AtencionService(atenciones, citas, medicamentos, pacientes, sessions::current, CLOCK, ZONE,
+            AuditLog.NONE);
         new AtencionController(service).register(bridge);
         sessions.set(GARCIA);
     }

@@ -5,6 +5,7 @@ import com.hospisoft.bridge.Json;
 import com.hospisoft.config.AppConfig;
 import com.hospisoft.bridge.JsApi;
 import com.hospisoft.controller.AtencionController;
+import com.hospisoft.controller.AuditoriaController;
 import com.hospisoft.controller.CitaController;
 import com.hospisoft.controller.Controller;
 import com.hospisoft.controller.DashboardController;
@@ -13,6 +14,8 @@ import com.hospisoft.controller.MedicoController;
 import com.hospisoft.controller.PacienteController;
 import com.hospisoft.dao.AtencionDao;
 import com.hospisoft.dao.AtencionRepository;
+import com.hospisoft.dao.AuditoriaDao;
+import com.hospisoft.dao.AuditoriaRepository;
 import com.hospisoft.dao.CitaDao;
 import com.hospisoft.dao.DashboardDao;
 import com.hospisoft.dao.DashboardRepository;
@@ -29,6 +32,7 @@ import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.db.ConnectionPool;
 import com.hospisoft.db.SchemaChecker;
 import com.hospisoft.service.AppZone;
+import com.hospisoft.service.AuditoriaService;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.AtencionService;
 import com.hospisoft.service.CitaService;
@@ -109,6 +113,7 @@ public class MainApp extends Application {
         CitaRepository citas;
         AtencionRepository atenciones;
         DashboardRepository dashboard;
+        AuditoriaRepository auditoriaRepository;
         SchemaChecker schemaChecker = null;
         if (config.state() == AppConfig.State.OK) {
             pool = ConnectionPool.forJdbc(config.url(), config.user(), config.password(), config.poolSize());
@@ -119,6 +124,7 @@ public class MainApp extends Application {
             citas = new CitaDao(pool);
             atenciones = new AtencionDao(pool);
             dashboard = new DashboardDao(pool);
+            auditoriaRepository = new AuditoriaDao(pool);
             schemaChecker = new SchemaChecker(pool);
             System.out.println("[config] loaded " + config.sourcePath());
         } else {
@@ -130,6 +136,7 @@ public class MainApp extends Application {
             citas = UnavailableRepository.create(CitaRepository.class);
             atenciones = UnavailableRepository.create(AtencionRepository.class);
             dashboard = UnavailableRepository.create(DashboardRepository.class);
+            auditoriaRepository = UnavailableRepository.create(AuditoriaRepository.class);
         }
         startupProbe = new CachedStartupProbe(new DefaultStartupProbe(config, schemaChecker));
         startupProbe.setListener(status -> Platform.runLater(this::notifyStartupStatus));
@@ -138,18 +145,23 @@ public class MainApp extends Application {
         engine = view.getEngine();
         engine.setJavaScriptEnabled(true);
         router = new PageRouter(engine, sessions);
-        bridge = new Bridge(new AuthService(usuarios), sessions, startupProbe, router, this::runScriptLater);
         java.time.Clock clock = java.time.Clock.systemDefaultZone();
         AppZone appZone = AppZone.systemDefault();
+        // one audit trail shared by every use case; best-effort, so a failing write never breaks an operation
+        AuditoriaService auditoria = new AuditoriaService(auditoriaRepository, sessions::current, appZone);
+        bridge = new Bridge(new AuthService(usuarios, auditoria), sessions, startupProbe, router,
+            this::runScriptLater, auditoria);
         List<Controller> controllers = List.of(
-            new MedicoController(new MedicoService(medicos, sessions::current)),
-            new PacienteController(new PacienteService(pacientes, sessions::current)),
-            new MedicamentoController(new MedicamentoService(medicamentos, sessions::current)),
-            new CitaController(new CitaService(citas, medicos, pacientes, sessions::current, clock, appZone)),
+            new MedicoController(new MedicoService(medicos, sessions::current, auditoria)),
+            new PacienteController(new PacienteService(pacientes, sessions::current, auditoria)),
+            new MedicamentoController(new MedicamentoService(medicamentos, sessions::current, auditoria)),
+            new CitaController(new CitaService(citas, medicos, pacientes, sessions::current, clock, appZone,
+                auditoria)),
             new AtencionController(new AtencionService(atenciones, citas, medicamentos, pacientes,
-                sessions::current, clock, appZone)),
+                sessions::current, clock, appZone, auditoria)),
             new DashboardController(new DashboardService(dashboard, medicamentos, sessions::current,
-                clock, appZone)));
+                clock, appZone)),
+            new AuditoriaController(auditoria));
         controllers.forEach(controller -> controller.register(bridge));
         jsApi = new JsApi(bridge); // only the facade is reachable from JavaScript
 

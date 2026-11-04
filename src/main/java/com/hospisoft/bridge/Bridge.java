@@ -2,7 +2,10 @@ package com.hospisoft.bridge;
 
 import com.hospisoft.db.DatabaseAuthException;
 import com.hospisoft.db.DatabaseUnavailableException;
+import com.hospisoft.model.AccionAuditoria;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Rol;
+import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.AuthenticationException;
 import com.hospisoft.service.ConflictException;
@@ -71,6 +74,8 @@ public final class Bridge {
     public static final String NOT_FOUND_MESSAGE = "El registro no existe";
     public static final String INTERNAL_ERROR_MESSAGE = "Error interno de la aplicación";
     public static final int MAX_LOG_CHARS = 2000;
+    /** Audit text of a logout. */
+    public static final String LOGOUT_DETALLE = "Salida del sistema";
 
     private static final Pattern REQUEST_ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
 
@@ -80,15 +85,24 @@ public final class Bridge {
     private final Navigator navigator;
     private final ScriptSink scriptSink;
     private final ExecutorService executor;
+    private final AuditLog audit;
     private final Map<String, Function<String, String>> asyncMethods = new ConcurrentHashMap<>();
 
+    /** Without an audit trail for logout (tests that do not care about it). */
     public Bridge(AuthService authService, SessionHolder sessions, StartupProbe startupProbe,
                   Navigator navigator, ScriptSink scriptSink) {
+        this(authService, sessions, startupProbe, navigator, scriptSink, AuditLog.NONE);
+    }
+
+    /** @param audit records LOGOUT for the ending session (login is audited by {@link AuthService}) */
+    public Bridge(AuthService authService, SessionHolder sessions, StartupProbe startupProbe,
+                  Navigator navigator, ScriptSink scriptSink, AuditLog audit) {
         this.authService = authService;
         this.sessions = sessions;
         this.startupProbe = startupProbe;
         this.navigator = navigator;
         this.scriptSink = scriptSink;
+        this.audit = audit;
         this.executor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "hospisoft-bridge");
             thread.setDaemon(true);
@@ -165,11 +179,32 @@ public final class Bridge {
         return loginEnvelope(jsonCredentials);
     }
 
+    /**
+     * Clears the session at once. The LOGOUT audit entry is queued BEFORE the session is cleared,
+     * with a snapshot of the ending session as its actor, and written on the bridge thread: this
+     * method runs on the UI thread and must not wait for the database.
+     */
     public String logout() {
         return call(() -> {
+            sessions.current().ifPresent(this::auditLogout);
             sessions.clear();
             return Boolean.TRUE;
         });
+    }
+
+    /** Best-effort: neither a failing audit nor a stopped executor may break the logout. */
+    private void auditLogout(SessionContext ending) {
+        try {
+            executor.execute(() -> {
+                try {
+                    audit.recordAs(ending, AccionAuditoria.LOGOUT, ModuloAuditoria.SESION, null, LOGOUT_DETALLE);
+                } catch (RuntimeException ex) {
+                    System.err.println("[bridge] logout audit failed: " + describe(ex));
+                }
+            });
+        } catch (RejectedExecutionException ex) {
+            System.err.println("[bridge] logout audit skipped: bridge is shut down");
+        }
     }
 
     /** data is the session map, or null when nobody is logged in. */

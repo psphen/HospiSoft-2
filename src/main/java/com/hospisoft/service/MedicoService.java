@@ -3,7 +3,9 @@ package com.hospisoft.service;
 import com.hospisoft.dao.HasHistoryException;
 import com.hospisoft.dao.MedicoFilter;
 import com.hospisoft.dao.MedicoRepository;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.Rol;
 import java.util.List;
@@ -12,7 +14,8 @@ import java.util.function.Supplier;
 
 /**
  * Medico use cases. Only ADMIN may use this service in this phase. Input is trimmed and validated
- * against the schema limits; deleting a medico with history deactivates it instead.
+ * against the schema limits; deleting a medico with history deactivates it instead. Every successful
+ * write is recorded in the audit log.
  */
 public final class MedicoService {
 
@@ -23,12 +26,16 @@ public final class MedicoService {
     static final int MAX_TELEFONO = 20;
     static final int MAX_CORREO = 120;
 
+    static final String HAS_HISTORY_SUFFIX = " (tiene historial asociado)";
+
     private final MedicoRepository medicos;
     private final Access access;
+    private final AuditLog audit;
 
-    public MedicoService(MedicoRepository medicos, Supplier<Optional<SessionContext>> session) {
+    public MedicoService(MedicoRepository medicos, Supplier<Optional<SessionContext>> session, AuditLog audit) {
         this.medicos = medicos;
         this.access = new Access(session);
+        this.audit = audit;
     }
 
     public Page<Medico> list(MedicoFilter filter, int page, int pageSize) {
@@ -64,7 +71,9 @@ public final class MedicoService {
             clean = withActivo(clean, activo == null || activo);
             validate(clean);
             long id = medicos.insert(clean);
-            return withId(clean, id);
+            Medico created = withId(clean, id);
+            audit.record(AccionAuditoria.CREAR, ModuloAuditoria.MEDICO, id, detalle(created));
+            return created;
         }
         long id = clean.id();
         Medico stored = medicos.findById(id)
@@ -72,12 +81,28 @@ public final class MedicoService {
         clean = withActivo(clean, activo == null ? stored.activo() : activo);
         validate(clean);
         medicos.update(clean);
+        audit.record(AccionAuditoria.EDITAR, ModuloAuditoria.MEDICO, id, detalle(clean));
         return clean;
     }
 
     public DeleteOutcome delete(long id) {
         access.require(Rol.ADMIN);
-        medicos.findById(id).orElseThrow(() -> new NotFoundException("Medico " + id + " not found"));
+        Medico found = medicos.findById(id).orElseThrow(() -> new NotFoundException("Medico " + id + " not found"));
+        DeleteOutcome outcome = deleteOrDeactivate(id);
+        if (outcome == DeleteOutcome.DELETED) {
+            audit.record(AccionAuditoria.ELIMINAR, ModuloAuditoria.MEDICO, id, detalle(found));
+        } else {
+            audit.record(AccionAuditoria.DESACTIVAR, ModuloAuditoria.MEDICO, id, detalle(found) + HAS_HISTORY_SUFFIX);
+        }
+        return outcome;
+    }
+
+    /** Audit text, e.g. "Médico 1001001001 - Carlos Garcia (Medicina General)". */
+    private static String detalle(Medico m) {
+        return "Médico " + m.documento() + " - " + m.nombres() + " " + m.apellidos() + " (" + m.especialidad() + ")";
+    }
+
+    private DeleteOutcome deleteOrDeactivate(long id) {
         if (medicos.hasAssociatedHistory(id)) {
             medicos.setActivo(id, false);
             return DeleteOutcome.DEACTIVATED;

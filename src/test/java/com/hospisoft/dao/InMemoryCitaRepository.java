@@ -80,8 +80,24 @@ public final class InMemoryCitaRepository implements CitaRepository {
         return c.fechaHoraProgramada().isBefore(end) && cEnd.isAfter(start);
     }
 
+    /** True while a transaction body runs (lets tests prove side effects happen after the commit). */
+    public boolean transactionOpen() {
+        return transactionOpen;
+    }
+
+    private boolean transactionOpen;
+
     @Override
     public <T> T inTransaction(Function<CitaTx, T> work) {
+        transactionOpen = true;
+        try {
+            return inOpenTransaction(work);
+        } finally {
+            transactionOpen = false;
+        }
+    }
+
+    private <T> T inOpenTransaction(Function<CitaTx, T> work) {
         return work.apply(new CitaTx() {
             @Override
             public Optional<Boolean> lockMedico(long idMedico) {
@@ -162,7 +178,17 @@ public final class InMemoryCitaRepository implements CitaRepository {
 
     @Override
     public Optional<CitaView> findById(long id) {
+        if (failReadsWhen.getAsBoolean()) {
+            throw new com.hospisoft.db.DatabaseUnavailableException("read failed after the commit", null);
+        }
         return Optional.ofNullable(rows.get(id)).map(this::view);
+    }
+
+    private java.util.function.BooleanSupplier failReadsWhen = () -> false;
+
+    /** Makes findById throw while {@code condition} holds, e.g. once a write has been committed. */
+    public void failReadsWhen(java.util.function.BooleanSupplier condition) {
+        this.failReadsWhen = condition;
     }
 
     @Override
