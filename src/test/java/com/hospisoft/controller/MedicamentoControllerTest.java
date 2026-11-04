@@ -1,8 +1,10 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryMedicamentoRepository;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.model.Medicamento;
@@ -16,6 +18,7 @@ import com.hospisoft.service.StartupStatus;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -24,7 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** End-to-end medicamento methods through the async bridge with the in-memory repository. */
-class MedicamentoBridgeTest {
+class MedicamentoControllerTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
     private static final SessionContext PACIENTE = new SessionContext(3, "paciente1", Rol.PACIENTE, 20L, "Maria");
@@ -43,8 +46,15 @@ class MedicamentoBridgeTest {
         repository.add(new Medicamento(2L, "MED-002", "Ibuprofeno", null, "Caja x 10", 25, 30, true));
         repository.add(new Medicamento(3L, "MED-005", "Loratadina", null, "Caja x 10", 0, 15, false));
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        MedicamentoMethods.register(bridge, new MedicamentoService(repository, sessions::current));
+        new MedicamentoController(new MedicamentoService(repository, sessions::current)).register(bridge);
         sessions.set(ADMIN);
+    }
+
+    @Test
+    void registersExactlyTheMedicamentoMethods() {
+        MedicamentoController controller = new MedicamentoController(new MedicamentoService(repository, sessions::current));
+        assertEquals(Set.of("listMedicamentos", "getMedicamento", "saveMedicamento", "deleteMedicamento"),
+            ControllerTestSupport.registeredNames(controller));
     }
 
     @AfterEach

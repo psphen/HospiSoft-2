@@ -1,9 +1,11 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryCitaRepository;
 import com.hospisoft.dao.InMemoryMedicoRepository;
 import com.hospisoft.dao.InMemoryPacienteRepository;
@@ -27,6 +29,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -35,7 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** End-to-end cita methods through the async bridge with in-memory repositories (fixed clock and zone). */
-class CitaBridgeTest {
+class CitaControllerTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final AppZone ZONE = new AppZone(BOGOTA);
@@ -49,6 +52,7 @@ class CitaBridgeTest {
     private final SessionHolder sessions = new SessionHolder();
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
     private InMemoryCitaRepository citas;
+    private CitaService service;
     private Bridge bridge;
     private int sequence;
 
@@ -64,8 +68,15 @@ class CitaBridgeTest {
         citas.add(new Cita(1L, 10L, 20L, ZONE.at(TODAY, LocalTime.of(9, 0)), "Control", EstadoCita.PROGRAMADA, null, null, null));
         citas.add(new Cita(2L, 11L, 21L, ZONE.at(TODAY.plusDays(1), LocalTime.of(10, 0)), "Vacuna", EstadoCita.PROGRAMADA, null, null, null));
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        CitaMethods.register(bridge, new CitaService(citas, medicos, pacientes, sessions::current, CLOCK, ZONE));
+        service = new CitaService(citas, medicos, pacientes, sessions::current, CLOCK, ZONE);
+        new CitaController(service).register(bridge);
         sessions.set(ADMIN);
+    }
+
+    @Test
+    void registersExactlyTheCitaMethods() {
+        assertEquals(Set.of("listCitas", "getCita", "saveCita", "cancelarCita", "agendaMedico",
+            "listMedicosSelect", "listPacientesSelect"), ControllerTestSupport.registeredNames(new CitaController(service)));
     }
 
     @AfterEach

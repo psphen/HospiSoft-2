@@ -149,7 +149,8 @@ Las contraseñas se almacenan con PBKDF2WithHmacSHA256, 600 000 iteraciones, sal
 ```
 src/main/java/com/hospisoft/
 ├── ui/        Launcher (main sin JavaFX), MainApp (Stage + WebView), PageRouter, AuthGuard
-├── bridge/    JsApi (lo único visible para JS), Bridge, Json, Payload, Dtos, *Methods
+├── bridge/    JsApi (lo único visible para JS), Bridge (front controller), Json, Payload, Dtos
+├── controller/ Controladores MVC por módulo: Paciente, Medico, Cita, Medicamento, Atencion, Dashboard
 ├── config/    AppConfig (lectura de config.properties)
 ├── db/        ConnectionPool (pool propio), SchemaChecker, SqlErrorClassifier, excepciones
 ├── security/  PasswordHasher

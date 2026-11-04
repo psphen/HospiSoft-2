@@ -1,9 +1,11 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryAtencionRepository;
 import com.hospisoft.dao.InMemoryCitaRepository;
 import com.hospisoft.dao.InMemoryDashboardRepository;
@@ -32,6 +34,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -40,7 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** The dashboard answers the whole panel in one call, already scoped to the session's role. */
-class DashboardBridgeTest {
+class DashboardControllerTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final AppZone ZONE = new AppZone(BOGOTA);
@@ -52,6 +55,7 @@ class DashboardBridgeTest {
 
     private final SessionHolder sessions = new SessionHolder();
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(8);
+    private DashboardService service;
     private Bridge bridge;
     private int sequence;
 
@@ -70,10 +74,16 @@ class DashboardBridgeTest {
             null, null, null));
         InMemoryAtencionRepository atenciones = new InMemoryAtencionRepository(citas, medicos, pacientes, medicamentos);
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        DashboardMethods.register(bridge, new DashboardService(
+        service = new DashboardService(
             new InMemoryDashboardRepository(citas, medicos, pacientes, medicamentos, atenciones),
-            medicamentos, sessions::current, CLOCK, ZONE));
+            medicamentos, sessions::current, CLOCK, ZONE);
+        new DashboardController(service).register(bridge);
         sessions.set(ADMIN);
+    }
+
+    @Test
+    void registersExactlyTheDashboardMethod() {
+        assertEquals(Set.of("dashboard"), ControllerTestSupport.registeredNames(new DashboardController(service)));
     }
 
     @AfterEach
@@ -150,11 +160,11 @@ class DashboardBridgeTest {
     void aDatabaseOutageAnswersDbUnavailable() throws InterruptedException {
         Bridge failing = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
         try {
-            DashboardMethods.register(failing, new DashboardService(
+            new DashboardController(new DashboardService(
                 (scope, dayStart, dayEnd, now, limit) -> {
                     throw new DatabaseUnavailableException("pool down", null);
                 },
-                new InMemoryMedicamentoRepository(), sessions::current, CLOCK, ZONE));
+                new InMemoryMedicamentoRepository(), sessions::current, CLOCK, ZONE)).register(failing);
             scripts.clear();
             assertEquals(true, Json.parseObject(failing.call("fail1", "dashboard", "{}")).get("ok"));
             String script = scripts.poll(10, TimeUnit.SECONDS);

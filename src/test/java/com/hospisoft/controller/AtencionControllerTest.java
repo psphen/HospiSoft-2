@@ -1,10 +1,12 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryAtencionRepository;
 import com.hospisoft.dao.InMemoryCitaRepository;
 import com.hospisoft.dao.InMemoryMedicamentoRepository;
@@ -31,6 +33,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -39,7 +42,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /** End-to-end attention methods through the async bridge with in-memory repositories. */
-class AtencionBridgeTest {
+class AtencionControllerTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final AppZone ZONE = new AppZone(BOGOTA);
@@ -54,6 +57,7 @@ class AtencionBridgeTest {
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
     private InMemoryMedicamentoRepository medicamentos;
     private InMemoryCitaRepository citas;
+    private AtencionService service;
     private Bridge bridge;
     private int sequence;
 
@@ -71,9 +75,15 @@ class AtencionBridgeTest {
         citas.add(new Cita(1L, 10L, 21L, ZONE.at(TODAY, LocalTime.of(9, 0)), "Control", EstadoCita.PROGRAMADA, null, null, null));
         InMemoryAtencionRepository atenciones = new InMemoryAtencionRepository(citas, medicos, pacientes, medicamentos);
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        AtencionMethods.register(bridge, new AtencionService(atenciones, citas, medicamentos, pacientes,
-            sessions::current, CLOCK, ZONE));
+        service = new AtencionService(atenciones, citas, medicamentos, pacientes, sessions::current, CLOCK, ZONE);
+        new AtencionController(service).register(bridge);
         sessions.set(GARCIA);
+    }
+
+    @Test
+    void registersExactlyTheAtencionMethods() {
+        assertEquals(Set.of("iniciarAtencion", "finalizarAtencion", "getHistoriaCita", "historialPaciente",
+            "misRecetas", "medicamentosParaRecetar"), ControllerTestSupport.registeredNames(new AtencionController(service)));
     }
 
     @AfterEach

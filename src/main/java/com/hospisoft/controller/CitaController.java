@@ -1,5 +1,9 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
+import com.hospisoft.bridge.BadRequestException;
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Dtos;
+import com.hospisoft.bridge.Payload;
 import com.hospisoft.model.CitaView;
 import com.hospisoft.model.EstadoCita;
 import com.hospisoft.model.Medico;
@@ -20,7 +24,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Registers the cita methods on the bridge (phase 4).
+ * MVC controller of the cita module: receives the View's request from the JS bridge, parses the
+ * payload, delegates to {@link CitaService} (the Model) and returns the DTO.
  *
  * <p>listCitas {@code {"filter":{"texto","fecha":"yyyy-MM-dd","estado","idMedico","rango"},"page","pageSize"}};
  * getCita / cancelarCita {@code {"id"}}; saveCita {@code {"id":0|N,"idMedico","idPaciente","fecha","hora","motivo"}}
@@ -33,67 +38,88 @@ import java.util.Map;
  * pacienteDocumento, fecha (yyyy-MM-dd), hora (HH:mm), fechaHora (ISO-8601 with offset), motivo, estado,
  * horaInicioReal, horaFinReal, observaciones.
  */
-public final class CitaMethods {
+public final class CitaController implements Controller {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
-    private CitaMethods() {
+    private final CitaService citas;
+
+    public CitaController(CitaService citas) {
+        this.citas = citas;
     }
 
-    public static void register(Bridge bridge, CitaService citas) {
-        bridge.register("listCitas", payload -> {
-            Map<String, Object> body = Payload.object(payload);
-            Map<String, Object> f = Payload.optObject(body, "filter");
-            CitaFilter filter = new CitaFilter(Payload.optString(f, "texto"), Payload.optDate(f, "fecha"),
-                estado(Payload.optString(f, "estado")), Payload.optLong(f, "idMedico"),
-                rango(Payload.optString(f, "rango")));
-            return Dtos.toMap(citas.list(filter, CrudMethods.page(body), CrudMethods.pageSize(body)),
-                view -> toMap(view, citas.zone()));
-        });
-        bridge.register("getCita", payload ->
-            toMap(citas.get(Payload.requireLong(Payload.object(payload), "id")), citas.zone()));
-        bridge.register("saveCita", payload -> {
-            Map<String, Object> body = Payload.object(payload);
-            Long id = Payload.optLong(body, "id");
-            CitaInput input = new CitaInput(Payload.optLong(body, "idMedico"), Payload.optLong(body, "idPaciente"),
-                Payload.optString(body, "fecha"), Payload.optString(body, "hora"), Payload.optString(body, "motivo"));
-            CitaView saved = id == null || id == 0 ? citas.create(input) : citas.reschedule(id, input);
-            return toMap(saved, citas.zone());
-        });
-        bridge.register("cancelarCita", payload ->
-            toMap(citas.cancel(Payload.requireLong(Payload.object(payload), "id")), citas.zone()));
-        bridge.register("agendaMedico", payload -> {
-            Map<String, Object> body = Payload.object(payload);
-            Agenda agenda = citas.agenda(Payload.optLong(body, "idMedico"), Payload.optDate(body, "fecha"));
-            return toMap(agenda, citas.zone());
-        });
-        bridge.register("listMedicosSelect", payload -> {
-            List<Map<String, Object>> items = new ArrayList<>();
-            for (Medico m : citas.medicosForSelect()) {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put("id", m.id());
-                map.put("nombres", m.nombres());
-                map.put("apellidos", m.apellidos());
-                map.put("especialidad", m.especialidad());
-                items.add(map);
-            }
-            return items;
-        });
-        bridge.register("listPacientesSelect", payload -> {
-            List<Map<String, Object>> items = new ArrayList<>();
-            for (Paciente p : citas.pacientesForSelect()) {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put("id", p.id());
-                map.put("documento", p.documento());
-                map.put("nombres", p.nombres());
-                map.put("apellidos", p.apellidos());
-                items.add(map);
-            }
-            return items;
-        });
+    @Override
+    public void register(Bridge bridge) {
+        bridge.register("listCitas", this::list);
+        bridge.register("getCita", this::get);
+        bridge.register("saveCita", this::save);
+        bridge.register("cancelarCita", this::cancel);
+        bridge.register("agendaMedico", this::agenda);
+        bridge.register("listMedicosSelect", this::medicosForSelect);
+        bridge.register("listPacientesSelect", this::pacientesForSelect);
     }
 
-    static EstadoCita estado(String raw) {
+    private Object list(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        Map<String, Object> f = Payload.optObject(body, "filter");
+        CitaFilter filter = new CitaFilter(Payload.optString(f, "texto"), Payload.optDate(f, "fecha"),
+            estado(Payload.optString(f, "estado")), Payload.optLong(f, "idMedico"),
+            rango(Payload.optString(f, "rango")));
+        return Dtos.toMap(citas.list(filter, Paging.page(body), Paging.pageSize(body)),
+            view -> toMap(view, citas.zone()));
+    }
+
+    private Object get(String payload) {
+        return toMap(citas.get(Payload.requireLong(Payload.object(payload), "id")), citas.zone());
+    }
+
+    /** Creates the cita when {@code id} is missing or 0; otherwise reschedules it. */
+    private Object save(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        Long id = Payload.optLong(body, "id");
+        CitaInput input = new CitaInput(Payload.optLong(body, "idMedico"), Payload.optLong(body, "idPaciente"),
+            Payload.optString(body, "fecha"), Payload.optString(body, "hora"), Payload.optString(body, "motivo"));
+        CitaView saved = id == null || id == 0 ? citas.create(input) : citas.reschedule(id, input);
+        return toMap(saved, citas.zone());
+    }
+
+    private Object cancel(String payload) {
+        return toMap(citas.cancel(Payload.requireLong(Payload.object(payload), "id")), citas.zone());
+    }
+
+    private Object agenda(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        Agenda agenda = citas.agenda(Payload.optLong(body, "idMedico"), Payload.optDate(body, "fecha"));
+        return toMap(agenda, citas.zone());
+    }
+
+    private Object medicosForSelect(String payload) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Medico m : citas.medicosForSelect()) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", m.id());
+            map.put("nombres", m.nombres());
+            map.put("apellidos", m.apellidos());
+            map.put("especialidad", m.especialidad());
+            items.add(map);
+        }
+        return items;
+    }
+
+    private Object pacientesForSelect(String payload) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Paciente p : citas.pacientesForSelect()) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", p.id());
+            map.put("documento", p.documento());
+            map.put("nombres", p.nombres());
+            map.put("apellidos", p.apellidos());
+            items.add(map);
+        }
+        return items;
+    }
+
+    private static EstadoCita estado(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
@@ -104,7 +130,7 @@ public final class CitaMethods {
         }
     }
 
-    static CitaRango rango(String raw) {
+    private static CitaRango rango(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
@@ -115,7 +141,8 @@ public final class CitaMethods {
         }
     }
 
-    public static Map<String, Object> toMap(CitaView view, AppZone zone) {
+    /** Cita DTO; also used by {@link AtencionController}, whose responses embed the cita. */
+    static Map<String, Object> toMap(CitaView view, AppZone zone) {
         var c = view.cita();
         LocalDate fecha = zone.dateOf(c.fechaHoraProgramada());
         Map<String, Object> map = new LinkedHashMap<>();
@@ -137,7 +164,7 @@ public final class CitaMethods {
         return map;
     }
 
-    static Map<String, Object> toMap(Agenda agenda, AppZone zone) {
+    private static Map<String, Object> toMap(Agenda agenda, AppZone zone) {
         List<Map<String, Object>> slots = new ArrayList<>(agenda.slots().size());
         for (Agenda.Slot slot : agenda.slots()) {
             Map<String, Object> s = new LinkedHashMap<>();

@@ -1,25 +1,20 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryMedicoRepository;
-import com.hospisoft.dao.InMemoryPacienteRepository;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.model.Medico;
-import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.MedicoService;
-import com.hospisoft.service.PacienteService;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupStatus;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +27,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** End-to-end through the async bridge with in-memory repositories (no database). */
-class CrudBridgeTest {
+/** End-to-end medico methods through the async bridge with the in-memory repository (no database). */
+class MedicoControllerTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
     private static final SessionContext MEDICO = new SessionContext(2, "dr.garcia", Rol.MEDICO, 10L, "Carlos Garcia");
     private static final SessionContext PACIENTE = new SessionContext(3, "paciente1", Rol.PACIENTE, 20L, "Maria");
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-26T12:00:00Z"), ZoneOffset.UTC);
     private static final UsuarioRepository NO_USERS = username -> Optional.empty();
 
     /** Delivers resolved envelopes to the test thread. */
@@ -54,27 +48,21 @@ class CrudBridgeTest {
     private final SessionHolder sessions = new SessionHolder();
     private final QueueSink sink = new QueueSink();
     private InMemoryMedicoRepository medicos;
-    private InMemoryPacienteRepository pacientes;
+    private MedicoService service;
     private Bridge bridge;
     private int sequence;
 
     @BeforeEach
     void setUp() {
         medicos = new InMemoryMedicoRepository();
-        pacientes = new InMemoryPacienteRepository();
         for (int i = 1; i <= 12; i++) {
             medicos.add(new Medico(null, "100" + i, "Nombre" + i, "Apellido" + String.format("%02d", i),
                 i % 2 == 0 ? "Pediatria" : "Cardiologia", null, null, i != 12));
         }
-        pacientes.add(new Paciente(20L, "2001", "Maria", "Torres", LocalDate.of(1990, 5, 14), "F", null, null, null, true));
-        pacientes.add(new Paciente(21L, "2002", "Juan", "Martinez", LocalDate.of(1985, 11, 2), "M", null, null, null, true));
-        pacientes.add(new Paciente(22L, "2003", "Ana", "Ramirez", LocalDate.of(2015, 3, 21), "F", null, null, null, true));
-        pacientes.markAttended(20L, 10L);
 
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, sink);
-        CrudMethods.register(bridge,
-            new MedicoService(medicos, sessions::current),
-            new PacienteService(pacientes, sessions::current, CLOCK));
+        service = new MedicoService(medicos, sessions::current);
+        new MedicoController(service).register(bridge);
         sessions.set(ADMIN);
     }
 
@@ -110,12 +98,10 @@ class CrudBridgeTest {
     }
 
     @Test
-    void allNineMethodsAreRegistered() {
-        assertTrue(bridge.asyncMethodNames().containsAll(Set.of("listMedicos", "getMedico", "saveMedico",
-            "deleteMedico", "listEspecialidades", "listPacientes", "getPaciente", "savePaciente", "deletePaciente")));
+    void registersExactlyTheMedicoMethods() {
+        assertEquals(Set.of("listMedicos", "getMedico", "saveMedico", "deleteMedico", "listEspecialidades"),
+            ControllerTestSupport.registeredNames(new MedicoController(service)));
     }
-
-    // ------------------------------------------------------------ medicos
 
     @Test
     void listMedicosPaginatesWithDefaultsAndFilters() throws InterruptedException {
@@ -207,48 +193,9 @@ class CrudBridgeTest {
         assertEquals(List.of("Cardiologia", "Pediatria"), envelope.get("data"));
     }
 
-    // ------------------------------------------------------------ pacientes
-
     @Test
-    void pacienteRoundTripWithDatesAndAge() throws InterruptedException {
-        Map<String, Object> list = data(invoke("listPacientes", "{\"filter\":{\"sexo\":\"F\"}}"));
-        assertEquals(2L, list.get("total"));
-        Map<String, Object> ana = items(list).get(0);
-        assertEquals("Ramirez", ana.get("apellidos"));
-        assertEquals("2015-03-21", ana.get("fechaNacimiento"));
-        assertEquals(11L, ana.get("edad"));
-
-        Map<String, Object> saved = data(invoke("savePaciente",
-            "{\"documento\":\"3001\",\"nombres\":\"Luis\",\"apellidos\":\"Perez\",\"fechaNacimiento\":\"2000-02-29\","
-                + "\"sexo\":\"m\",\"direccion\":\" Calle 9 \"}"));
-        assertEquals("M", saved.get("sexo"));
-        assertEquals("Calle 9", saved.get("direccion"));
-        assertEquals(26L, saved.get("edad"));
-        assertEquals(true, saved.get("activo"));
-
-        Map<String, Object> badDate = invoke("savePaciente",
-            "{\"documento\":\"3002\",\"nombres\":\"A\",\"apellidos\":\"B\",\"fechaNacimiento\":\"31/12/2000\",\"sexo\":\"M\"}");
-        assertEquals("BAD_REQUEST", badDate.get("code"));
-
-        Map<String, Object> future = invoke("savePaciente",
-            "{\"documento\":\"3002\",\"nombres\":\"A\",\"apellidos\":\"B\",\"fechaNacimiento\":\"2030-01-01\",\"sexo\":\"M\"}");
-        assertEquals("VALIDATION", future.get("code"));
-
-        assertEquals("DEACTIVATED", data(invoke("deletePaciente", "{\"id\":20}")).get("outcome"));
-        assertEquals("DELETED", data(invoke("deletePaciente", "{\"id\":22}")).get("outcome"));
-    }
-
-    @Test
-    void medicoSeesOnlyAttendedPatientsAndCannotWrite() throws InterruptedException {
+    void medicoRoleCannotReadTheMedicoCatalog() throws InterruptedException {
         sessions.set(MEDICO);
-        Map<String, Object> list = data(invoke("listPacientes", "{}"));
-        assertEquals(1L, list.get("total"));
-        assertEquals("Torres", items(list).get(0).get("apellidos"));
-        assertEquals("Maria Torres", data(invoke("getPaciente", "{\"id\":20}")).get("nombreCompleto"));
-        assertEquals("NOT_FOUND", invoke("getPaciente", "{\"id\":21}").get("code"), "out of scope must look missing");
-        assertEquals("NOT_FOUND", invoke("getPaciente", "{\"id\":999}").get("code"));
-        assertEquals("FORBIDDEN", invoke("savePaciente", "{\"documento\":\"x\"}").get("code"));
-        assertEquals("FORBIDDEN", invoke("deletePaciente", "{\"id\":20}").get("code"));
         assertEquals("FORBIDDEN", invoke("listMedicos", "{}").get("code"));
         assertEquals("FORBIDDEN", invoke("listEspecialidades", "").get("code"));
     }
@@ -256,8 +203,7 @@ class CrudBridgeTest {
     @Test
     void pacienteRoleIsForbiddenEverywhere() throws InterruptedException {
         sessions.set(PACIENTE);
-        for (String method : List.of("listMedicos", "getMedico", "saveMedico", "deleteMedico", "listEspecialidades",
-            "listPacientes", "getPaciente", "savePaciente", "deletePaciente")) {
+        for (String method : List.of("listMedicos", "getMedico", "saveMedico", "deleteMedico", "listEspecialidades")) {
             Map<String, Object> envelope = invoke(method, "{\"id\":20}");
             assertEquals("FORBIDDEN", envelope.get("code"), method);
             assertEquals(Bridge.FORBIDDEN_MESSAGE, envelope.get("message"));

@@ -3,12 +3,14 @@ package com.hospisoft.ui;
 import com.hospisoft.bridge.Bridge;
 import com.hospisoft.bridge.Json;
 import com.hospisoft.config.AppConfig;
-import com.hospisoft.bridge.AtencionMethods;
-import com.hospisoft.bridge.CitaMethods;
-import com.hospisoft.bridge.CrudMethods;
-import com.hospisoft.bridge.DashboardMethods;
 import com.hospisoft.bridge.JsApi;
-import com.hospisoft.bridge.MedicamentoMethods;
+import com.hospisoft.controller.AtencionController;
+import com.hospisoft.controller.CitaController;
+import com.hospisoft.controller.Controller;
+import com.hospisoft.controller.DashboardController;
+import com.hospisoft.controller.MedicamentoController;
+import com.hospisoft.controller.MedicoController;
+import com.hospisoft.controller.PacienteController;
 import com.hospisoft.dao.AtencionDao;
 import com.hospisoft.dao.AtencionRepository;
 import com.hospisoft.dao.CitaDao;
@@ -37,6 +39,7 @@ import com.hospisoft.service.MedicamentoService;
 import com.hospisoft.service.MedicoService;
 import com.hospisoft.service.PacienteService;
 import com.hospisoft.service.SessionHolder;
+import java.util.List;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
@@ -46,7 +49,7 @@ import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 
-/** Composition root: wires config, database, services, the JS bridge and the WebView. */
+/** Composition root: wires config, database, services, the MVC controllers, the JS bridge and the WebView. */
 public class MainApp extends Application {
 
     private static final String TITLE = "HospiSoft";
@@ -136,17 +139,18 @@ public class MainApp extends Application {
         engine.setJavaScriptEnabled(true);
         router = new PageRouter(engine, sessions);
         bridge = new Bridge(new AuthService(usuarios), sessions, startupProbe, router, this::runScriptLater);
-        CrudMethods.register(bridge,
-            new MedicoService(medicos, sessions::current),
-            new PacienteService(pacientes, sessions::current));
-        MedicamentoMethods.register(bridge, new MedicamentoService(medicamentos, sessions::current));
         java.time.Clock clock = java.time.Clock.systemDefaultZone();
         AppZone appZone = AppZone.systemDefault();
-        CitaMethods.register(bridge, new CitaService(citas, medicos, pacientes, sessions::current, clock, appZone));
-        AtencionMethods.register(bridge, new AtencionService(atenciones, citas, medicamentos, pacientes,
-            sessions::current, clock, appZone));
-        DashboardMethods.register(bridge, new DashboardService(dashboard, medicamentos, sessions::current,
-            clock, appZone));
+        List<Controller> controllers = List.of(
+            new MedicoController(new MedicoService(medicos, sessions::current)),
+            new PacienteController(new PacienteService(pacientes, sessions::current)),
+            new MedicamentoController(new MedicamentoService(medicamentos, sessions::current)),
+            new CitaController(new CitaService(citas, medicos, pacientes, sessions::current, clock, appZone)),
+            new AtencionController(new AtencionService(atenciones, citas, medicamentos, pacientes,
+                sessions::current, clock, appZone)),
+            new DashboardController(new DashboardService(dashboard, medicamentos, sessions::current,
+                clock, appZone)));
+        controllers.forEach(controller -> controller.register(bridge));
         jsApi = new JsApi(bridge); // only the facade is reachable from JavaScript
 
         engine.setOnAlert(event -> System.out.println("[web alert] " + Bridge.sanitizeLog(event.getData())));

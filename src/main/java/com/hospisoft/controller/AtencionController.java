@@ -1,12 +1,15 @@
-package com.hospisoft.bridge;
+package com.hospisoft.controller;
 
+import com.hospisoft.bridge.BadRequestException;
+import com.hospisoft.bridge.Bridge;
+import com.hospisoft.bridge.Dtos;
+import com.hospisoft.bridge.Payload;
 import com.hospisoft.model.HistoriaView;
 import com.hospisoft.model.Medicamento;
 import com.hospisoft.model.RecetaView;
 import com.hospisoft.service.Atencion;
 import com.hospisoft.service.AtencionInput;
 import com.hospisoft.service.AtencionService;
-import com.hospisoft.service.AppZone;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -15,7 +18,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Registers the attention methods on the bridge (phase 5).
+ * MVC controller of the attention module: receives the View's request from the JS bridge, parses
+ * the payload, delegates to {@link AtencionService} (the Model) and returns the DTO.
  *
  * <p>Payloads:
  * <ul>
@@ -33,52 +37,70 @@ import java.util.Map;
  * {@code recetas[i].<field>}), NOT_FOUND (missing or out of scope), CONFLICT (the cita left its
  * expected state, or the attention was already closed).
  */
-public final class AtencionMethods {
+public final class AtencionController implements Controller {
 
-    private AtencionMethods() {
+    private final AtencionService atenciones;
+
+    public AtencionController(AtencionService atenciones) {
+        this.atenciones = atenciones;
     }
 
-    public static void register(Bridge bridge, AtencionService atenciones) {
-        bridge.register("iniciarAtencion", payload ->
-            CitaMethods.toMap(atenciones.iniciar(Payload.requireLong(Payload.object(payload), "idCita")),
-                atenciones.zone()));
-        bridge.register("finalizarAtencion", payload -> {
-            Atencion result = atenciones.finalizar(inputFrom(Payload.object(payload)));
+    @Override
+    public void register(Bridge bridge) {
+        bridge.register("iniciarAtencion", this::iniciar);
+        bridge.register("finalizarAtencion", this::finalizar);
+        bridge.register("getHistoriaCita", this::historiaDeCita);
+        bridge.register("historialPaciente", this::historialPaciente);
+        bridge.register("misRecetas", this::misRecetas);
+        bridge.register("medicamentosParaRecetar", this::medicamentosParaRecetar);
+    }
+
+    private Object iniciar(String payload) {
+        return CitaController.toMap(atenciones.iniciar(Payload.requireLong(Payload.object(payload), "idCita")),
+            atenciones.zone());
+    }
+
+    private Object finalizar(String payload) {
+        Atencion result = atenciones.finalizar(inputFrom(Payload.object(payload)));
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("idHistoria", result.idHistoria());
+        map.put("cita", CitaController.toMap(result.cita(), atenciones.zone()));
+        map.put("recetas", recetas(result.recetas()));
+        return map;
+    }
+
+    private Object historiaDeCita(String payload) {
+        return toMap(atenciones.historiaDeCita(Payload.requireLong(Payload.object(payload), "idCita")));
+    }
+
+    private Object historialPaciente(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        long idPaciente = Payload.requireLong(body, "idPaciente");
+        return Dtos.toMap(atenciones.historialPaciente(idPaciente, Paging.page(body), Paging.pageSize(body)),
+            AtencionController::toMap);
+    }
+
+    private Object misRecetas(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        return Dtos.toMap(atenciones.misRecetas(Paging.page(body), Paging.pageSize(body)),
+            AtencionController::toMap);
+    }
+
+    private Object medicamentosParaRecetar(String payload) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Medicamento m : atenciones.medicamentosParaRecetar()) {
             Map<String, Object> map = new LinkedHashMap<>();
-            map.put("idHistoria", result.idHistoria());
-            map.put("cita", CitaMethods.toMap(result.cita(), atenciones.zone()));
-            map.put("recetas", recetas(result.recetas()));
-            return map;
-        });
-        bridge.register("getHistoriaCita", payload ->
-            toMap(atenciones.historiaDeCita(Payload.requireLong(Payload.object(payload), "idCita"))));
-        bridge.register("historialPaciente", payload -> {
-            Map<String, Object> body = Payload.object(payload);
-            long idPaciente = Payload.requireLong(body, "idPaciente");
-            return Dtos.toMap(atenciones.historialPaciente(idPaciente, CrudMethods.page(body),
-                CrudMethods.pageSize(body)), AtencionMethods::toMap);
-        });
-        bridge.register("misRecetas", payload -> {
-            Map<String, Object> body = Payload.object(payload);
-            return Dtos.toMap(atenciones.misRecetas(CrudMethods.page(body), CrudMethods.pageSize(body)),
-                AtencionMethods::toMap);
-        });
-        bridge.register("medicamentosParaRecetar", payload -> {
-            List<Map<String, Object>> items = new ArrayList<>();
-            for (Medicamento m : atenciones.medicamentosParaRecetar()) {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put("id", m.id());
-                map.put("codigo", m.codigo());
-                map.put("nombre", m.nombre());
-                map.put("presentacion", m.presentacion());
-                map.put("stock", m.stock());
-                items.add(map);
-            }
-            return items;
-        });
+            map.put("id", m.id());
+            map.put("codigo", m.codigo());
+            map.put("nombre", m.nombre());
+            map.put("presentacion", m.presentacion());
+            map.put("stock", m.stock());
+            items.add(map);
+        }
+        return items;
     }
 
-    static AtencionInput inputFrom(Map<String, Object> body) {
+    private static AtencionInput inputFrom(Map<String, Object> body) {
         List<AtencionInput.RecetaInput> recetas = new ArrayList<>();
         Object raw = body.get("recetas");
         if (raw != null) {
@@ -108,7 +130,7 @@ public final class AtencionMethods {
             recetas);
     }
 
-    public static Map<String, Object> toMap(HistoriaView view) {
+    private static Map<String, Object> toMap(HistoriaView view) {
         var h = view.historia();
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", h.id());
@@ -127,7 +149,7 @@ public final class AtencionMethods {
         return map;
     }
 
-    public static Map<String, Object> toMap(RecetaView view) {
+    private static Map<String, Object> toMap(RecetaView view) {
         var r = view.receta();
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", r.id());
@@ -154,10 +176,5 @@ public final class AtencionMethods {
 
     private static String iso(OffsetDateTime value) {
         return value == null ? null : value.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-    }
-
-    /** Kept for symmetry with the other method registries. */
-    static AppZone zoneOf(AtencionService service) {
-        return service.zone();
     }
 }
