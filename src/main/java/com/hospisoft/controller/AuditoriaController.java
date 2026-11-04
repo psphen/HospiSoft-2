@@ -10,8 +10,11 @@ import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.service.AppZone;
 import com.hospisoft.service.AuditoriaFilter;
 import com.hospisoft.service.AuditoriaService;
+import com.hospisoft.service.ExportService;
+import com.hospisoft.service.ExportSpec;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -27,31 +30,63 @@ import java.util.function.Function;
  * codes and malformed dates are BAD_REQUEST; {@code hasta} before {@code desde} is VALIDATION.
  * DTO: id, fecha (yyyy-MM-dd HH:mm:ss in the app zone), fechaHora (ISO-8601 with offset), idUsuario,
  * username, rol, accion, accionLabel, modulo, moduloLabel, idRegistro, detalle.
+ *
+ * <p>exportAuditoria takes the same filter plus {@code "format":"xlsx|pdf"} (see {@link Exports}).
  */
 public final class AuditoriaController implements Controller {
 
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private final AuditoriaService auditoria;
+    static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.AUDITORIA, "auditoria", "Registro de Auditoría",
+        List.of("Fecha", "Usuario", "Rol", "Acción", "Módulo", "Registro", "Detalle"),
+        List.of(3, 3, 2, 3, 2, 1, 9));
 
-    public AuditoriaController(AuditoriaService auditoria) {
+    private final AuditoriaService auditoria;
+    private final ExportService exports;
+
+    public AuditoriaController(AuditoriaService auditoria, ExportService exports) {
         this.auditoria = auditoria;
+        this.exports = exports;
     }
 
     @Override
     public void register(Bridge bridge) {
         bridge.register("listAuditoria", this::list);
+        bridge.register("exportAuditoria", this::export);
+    }
+
+    private static AuditoriaFilter filter(Map<String, Object> body) {
+        Map<String, Object> f = Payload.optObject(body, "filter");
+        return new AuditoriaFilter(Payload.optString(f, "texto"),
+            code(Payload.optString(f, "accion"), AccionAuditoria::valueOf, "accion"),
+            code(Payload.optString(f, "modulo"), ModuloAuditoria::valueOf, "modulo"),
+            Payload.optDate(f, "desde"), Payload.optDate(f, "hasta"));
     }
 
     private Object list(String payload) {
         Map<String, Object> body = Payload.object(payload);
-        Map<String, Object> f = Payload.optObject(body, "filter");
-        AuditoriaFilter filter = new AuditoriaFilter(Payload.optString(f, "texto"),
-            code(Payload.optString(f, "accion"), AccionAuditoria::valueOf, "accion"),
-            code(Payload.optString(f, "modulo"), ModuloAuditoria::valueOf, "modulo"),
-            Payload.optDate(f, "desde"), Payload.optDate(f, "hasta"));
-        return Dtos.toMap(auditoria.list(filter, Paging.page(body), Paging.pageSize(body)),
+        return Dtos.toMap(auditoria.list(filter(body), Paging.page(body), Paging.pageSize(body)),
             entry -> toMap(entry, auditoria.zone()));
+    }
+
+    /** Exporting the trail is itself recorded (EXPORTAR on module AUDITORIA). */
+    private Object export(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        AuditoriaFilter filter = filter(body);
+        var format = Exports.format(body);
+        AppZone zone = auditoria.zone();
+        return Exports.toMap(exports.export(EXPORT, format, auditoria.listForExport(filter).map(a -> row(a, zone))));
+    }
+
+    private static List<String> row(Auditoria a, AppZone zone) {
+        return List.of(
+            a.fecha() == null ? "" : a.fecha().atZoneSameInstant(zone.zone()).format(FECHA),
+            a.username() == null ? Exports.NONE : a.username(),
+            a.rol() == null ? Exports.NONE : a.rol().name(),
+            a.accion().label(),
+            a.modulo().label(),
+            a.idRegistro() == null ? Exports.NONE : "#" + a.idRegistro(),
+            Exports.text(a.detalle()));
     }
 
     private static <E extends Enum<E>> E code(String raw, Function<String, E> parse, String field) {

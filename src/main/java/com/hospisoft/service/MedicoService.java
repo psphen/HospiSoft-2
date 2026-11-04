@@ -45,6 +45,11 @@ public final class MedicoService {
         return medicos.findPage(safe, page, pageSize);
     }
 
+    /** Every row {@link #list} would page through (same permission), up to the export cap. */
+    public ExportRows<Medico> listForExport(MedicoFilter filter) {
+        return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
+    }
+
     public Medico get(long id) {
         access.require(Rol.ADMIN);
         return medicos.findById(id).orElseThrow(() -> new NotFoundException("Medico " + id + " not found"));

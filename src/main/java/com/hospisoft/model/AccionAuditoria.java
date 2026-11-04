@@ -15,7 +15,8 @@ public enum AccionAuditoria {
     FINALIZAR_ATENCION("Finalizar atención"),
     LOGIN("Inicio de sesión"),
     LOGIN_FALLIDO("Inicio de sesión fallido"),
-    LOGOUT("Cierre de sesión");
+    LOGOUT("Cierre de sesión"),
+    EXPORTAR("Exportar");
 
     private final String label;
 

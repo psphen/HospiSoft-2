@@ -117,6 +117,11 @@ public final class CitaService {
         return citas.findPage(query, page, pageSize);
     }
 
+    /** Every row {@link #list} would page through (same permission and role scope), up to the export cap. */
+    public ExportRows<CitaView> listForExport(CitaFilter filter) {
+        return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
+    }
+
     public CitaView get(long id) {
         SessionContext session = access.require(Rol.ADMIN, Rol.MEDICO, Rol.PACIENTE);
         CitaView view = citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));

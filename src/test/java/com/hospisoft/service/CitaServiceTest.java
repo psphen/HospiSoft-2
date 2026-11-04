@@ -431,4 +431,25 @@ class CitaServiceTest {
         ValidationException ex = assertThrows(ValidationException.class, () -> service.agenda(null, TODAY));
         assertEquals(Validation.REQUIRED, ex.errors().get("idMedico"));
     }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportAppliesTheRoleScopeOfTheList() {
+        CitaFilter todas = new CitaFilter(null, null, null, null, CitaRango.TODAS);
+        assertEquals(service.list(todas, 1, 100).items(), service.listForExport(todas).items());
+        assertEquals(5, service.listForExport(todas).items().size());
+
+        current = GARCIA;
+        CitaFilter otroMedico = new CitaFilter(null, null, null, 11L, CitaRango.TODAS);
+        assertEquals(List.of(1L, 2L, 4L, 5L), service.listForExport(otroMedico).items().stream()
+            .map(v -> v.cita().id()).sorted().toList(), "a medico exports only its own citas, whatever idMedico says");
+
+        current = MARIA;
+        assertEquals(List.of(1L, 4L), service.listForExport(todas).items().stream()
+            .map(v -> v.cita().id()).sorted().toList(), "a paciente exports only its own citas");
+
+        current = null;
+        assertThrows(PermissionException.class, () -> service.listForExport(todas));
+    }
 }

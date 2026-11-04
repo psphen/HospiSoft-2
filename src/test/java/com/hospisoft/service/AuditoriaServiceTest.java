@@ -231,4 +231,22 @@ class AuditoriaServiceTest {
         assertEquals("second", page.items().get(0).detalle());
         assertEquals(ZONE, service.zone());
     }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheListFilterAndIsAdminOnly() {
+        service.record(AccionAuditoria.CREAR, ModuloAuditoria.PACIENTE, 20L, "first");
+        service.record(AccionAuditoria.EDITAR, ModuloAuditoria.MEDICO, 10L, "second");
+        AuditoriaFilter medicos = new AuditoriaFilter(null, null, ModuloAuditoria.MEDICO, null, null);
+        ExportRows<Auditoria> rows = service.listForExport(medicos);
+        assertEquals(service.list(medicos, 1, 100).items(), rows.items());
+        assertEquals(List.of("second"), rows.items().stream().map(Auditoria::detalle).toList());
+        assertEquals(2, service.listForExport(null).items().size());
+
+        assertThrows(ValidationException.class, () -> service.listForExport(new AuditoriaFilter(null, null, null,
+            LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 1))));
+        current = MEDICO;
+        assertThrows(PermissionException.class, () -> service.listForExport(AuditoriaFilter.NONE));
+    }
 }

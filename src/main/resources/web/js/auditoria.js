@@ -22,7 +22,8 @@
     FINALIZAR_ATENCION: 'bg-success',
     LOGIN: 'bg-secondary',
     LOGIN_FALLIDO: 'bg-danger',
-    LOGOUT: 'bg-secondary'
+    LOGOUT: 'bg-secondary',
+    EXPORTAR: 'bg-info text-dark'
   };
 
   var body = document.getElementById('auditoria-body');
@@ -142,7 +143,20 @@
 
   bind();
   prepareDateInputs();
+  /* Filter for an export: the same date check as the list, null (no export) when it fails. */
+  function exportFilter() {
+    crud.hideModalAlert(filterAlert);
+    var filter = currentFilter();
+    var problem = dateProblem(filter);
+    if (problem) {
+      crud.showModalAlert(filterAlert, problem);
+      return null;
+    }
+    return filter;
+  }
+
   window.HospiSoft.onReady(function () {
+    crud.bindExport({ method: 'exportAuditoria', filter: exportFilter });
     load(1);
   });
 })();

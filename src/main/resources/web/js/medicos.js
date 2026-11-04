@@ -315,6 +315,7 @@
   bind();
   window.HospiSoft.onReady(function () {
     loadEspecialidades();
+    crud.bindExport({ method: 'exportMedicos', filter: currentFilter });
     load(1);
   });
 })();

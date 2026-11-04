@@ -9,6 +9,7 @@ import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.AuthenticationException;
 import com.hospisoft.service.ConflictException;
+import com.hospisoft.service.ExportFailedException;
 import com.hospisoft.service.NotFoundException;
 import com.hospisoft.service.PageAccess;
 import com.hospisoft.service.PermissionException;
@@ -325,6 +326,9 @@ public final class Bridge {
         }
         if (ex instanceof ConflictException conflict) {
             return error("CONFLICT", conflict.userMessage());
+        }
+        if (ex instanceof ExportFailedException export) {
+            return error("EXPORT_FAILED", export.userMessage());
         }
         if (ex instanceof AuthenticationException) {
             return error("AUTH_FAILED", ex.getMessage());

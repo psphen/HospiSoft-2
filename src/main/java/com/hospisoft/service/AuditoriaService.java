@@ -142,4 +142,9 @@ public final class AuditoriaService implements AuditLog {
         OffsetDateTime to = f.hasta() == null ? null : zone.dayEnd(f.hasta());
         return auditoria.findPage(new AuditoriaQuery(f.texto(), f.accion(), f.modulo(), from, to), page, pageSize);
     }
+
+    /** Every row {@link #list} would page through (ADMIN only, newest first), up to the export cap. */
+    public ExportRows<Auditoria> listForExport(AuditoriaFilter filter) {
+        return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
+    }
 }

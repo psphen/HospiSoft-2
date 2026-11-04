@@ -7,15 +7,20 @@ import com.hospisoft.bridge.Bridge;
 import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryMedicamentoRepository;
 import com.hospisoft.dao.UsuarioRepository;
+import com.hospisoft.export.FakeFileSaver;
 import com.hospisoft.model.Medicamento;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.ConflictException;
+import com.hospisoft.service.ExportService;
 import com.hospisoft.service.MedicamentoService;
+import com.hospisoft.service.RecordingAuditLog;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupStatus;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** End-to-end medicamento methods through the async bridge with the in-memory repository. */
 class MedicamentoControllerTest {
@@ -37,7 +43,12 @@ class MedicamentoControllerTest {
     private final SessionHolder sessions = new SessionHolder();
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
     private InMemoryMedicamentoRepository repository;
+    private FakeFileSaver saver;
+    private RecordingAuditLog exportAudit;
+    private ExportService exports;
     private Bridge bridge;
+    @TempDir
+    Path dir;
     private int sequence;
 
     @BeforeEach
@@ -47,15 +58,20 @@ class MedicamentoControllerTest {
         repository.add(new Medicamento(2L, "MED-002", "Ibuprofeno", null, "Caja x 10", 25, 30, true));
         repository.add(new Medicamento(3L, "MED-005", "Loratadina", null, "Caja x 10", 0, 15, false));
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        new MedicamentoController(new MedicamentoService(repository, sessions::current, AuditLog.NONE)).register(bridge);
+        saver = new FakeFileSaver(null);
+        exportAudit = new RecordingAuditLog();
+        exports = ControllerTestSupport.exports(saver, exportAudit, sessions);
+        new MedicamentoController(new MedicamentoService(repository, sessions::current, AuditLog.NONE), exports)
+            .register(bridge);
         sessions.set(ADMIN);
     }
 
     @Test
     void registersExactlyTheMedicamentoMethods() {
         MedicamentoController controller = new MedicamentoController(
-            new MedicamentoService(repository, sessions::current, AuditLog.NONE));
-        assertEquals(Set.of("listMedicamentos", "getMedicamento", "saveMedicamento", "deleteMedicamento"),
+            new MedicamentoService(repository, sessions::current, AuditLog.NONE), exports);
+        assertEquals(Set.of("listMedicamentos", "getMedicamento", "saveMedicamento", "deleteMedicamento",
+                "exportMedicamentos"),
             ControllerTestSupport.registeredNames(controller));
     }
 
@@ -175,5 +191,27 @@ class MedicamentoControllerTest {
         assertEquals("FORBIDDEN", invoke("deleteMedicamento", "{\"id\":2}").get("code"));
         sessions.clear();
         assertEquals("FORBIDDEN", invoke("listMedicamentos", "{}").get("code"));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportWritesStockLabelsAndActivo() throws Exception {
+        saver.answer(dir.resolve("inventario.xlsx"));
+        assertEquals(3L, data(invoke("exportMedicamentos", "{\"format\":\"xlsx\"}")).get("rows"));
+        assertEquals("medicamentos_2026-11-04.xlsx", saver.last().suggestedFileName());
+        List<List<String>> table = ControllerTestSupport.table(dir.resolve("inventario.xlsx"));
+        assertEquals(List.of("#", "Código", "Nombre", "Presentación", "Stock", "Stock mín.", "Estado", "Activo"),
+            table.get(0));
+        assertTrue(table.contains(List.of("1", "MED-001", "Acetaminofen", "Caja x 20", "150", "30", "Disponible", "Sí")));
+        assertTrue(table.contains(List.of("2", "MED-002", "Ibuprofeno", "Caja x 10", "25", "30", "Stock bajo", "Sí")));
+        assertTrue(table.contains(List.of("3", "MED-005", "Loratadina", "Caja x 10", "0", "15", "Agotado", "No")));
+        assertEquals(ModuloAuditoria.MEDICAMENTO, exportAudit.only().modulo());
+
+        saver.answer(dir.resolve("agotados.pdf"));
+        assertEquals(1L, data(invoke("exportMedicamentos", "{\"filter\":{\"stockState\":\"agotado\"},\"format\":\"pdf\"}"))
+            .get("rows"));
+        assertEquals("BAD_REQUEST", invoke("exportMedicamentos", "{\"filter\":{\"stockState\":\"X\"},\"format\":\"pdf\"}")
+            .get("code"));
     }
 }

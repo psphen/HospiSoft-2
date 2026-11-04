@@ -54,18 +54,56 @@ class AuditoriaSchemaTest {
         return values;
     }
 
+    private static Set<String> quotedValues(String list) {
+        Set<String> values = new LinkedHashSet<>();
+        Matcher quoted = QUOTED.matcher(list);
+        while (quoted.find()) {
+            values.add(quoted.group(1));
+        }
+        return values;
+    }
+
+    /**
+     * Values of the named constraint auditoria_{column}_check, which schema.sql drops and re-adds
+     * after the CREATE TABLE so that re-running the file also widens the list on an existing table
+     * (PostgreSQL gives an inline column CHECK that same default name).
+     */
+    private static Set<String> namedCheckValues(String column) {
+        String name = "auditoria_" + column + "_check";
+        String drop = "ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS " + name + ";";
+        Matcher add = Pattern.compile("ALTER TABLE auditoria ADD CONSTRAINT " + name + "\\s+CHECK \\(" + column
+            + " IN \\(([^)]*)\\)\\);").matcher(schema);
+        assertTrue(schema.contains(drop), "missing: " + drop);
+        assertTrue(add.find(), "missing ADD CONSTRAINT " + name);
+        Set<String> values = quotedValues(add.group(1));
+        int created = schema.indexOf("CREATE TABLE IF NOT EXISTS auditoria (");
+        assertTrue(created < schema.indexOf(drop) && schema.indexOf(drop) < add.start(),
+            "order must be CREATE TABLE, DROP CONSTRAINT, ADD CONSTRAINT for " + name);
+        assertFalse(add.find(), "auditoria." + column + " must have a single CHECK definition");
+        assertFalse(table.contains("CHECK (" + column), "the CHECK on " + column + " lives only in the ALTER TABLE");
+        return values;
+    }
+
     private static Set<String> names(Enum<?>[] values) {
         return Arrays.stream(values).map(Enum::name).collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     @Test
     void accionCheckMatchesTheEnum() {
-        assertEquals(names(AccionAuditoria.values()), checkValues("accion"));
+        assertEquals(names(AccionAuditoria.values()), namedCheckValues("accion"));
     }
 
     @Test
     void moduloCheckMatchesTheEnum() {
-        assertEquals(names(ModuloAuditoria.values()), checkValues("modulo"));
+        assertEquals(names(ModuloAuditoria.values()), namedCheckValues("modulo"));
+    }
+
+    @Test
+    void exportValuesAreAccepted() {
+        assertTrue(namedCheckValues("accion").contains("EXPORTAR"));
+        assertTrue(namedCheckValues("modulo").contains("AUDITORIA"));
+        assertEquals("Exportar", AccionAuditoria.EXPORTAR.label());
+        assertEquals("Auditoría", ModuloAuditoria.AUDITORIA.label());
     }
 
     @Test

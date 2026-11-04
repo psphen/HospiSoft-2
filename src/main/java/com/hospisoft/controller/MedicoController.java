@@ -5,7 +5,11 @@ import com.hospisoft.bridge.Dtos;
 import com.hospisoft.bridge.Payload;
 import com.hospisoft.dao.MedicoFilter;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
+import com.hospisoft.service.ExportService;
+import com.hospisoft.service.ExportSpec;
 import com.hospisoft.service.MedicoService;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,14 +24,21 @@ import java.util.Map;
  *   <li>saveMedico: the dto (insert when id is missing or 0; {@code activo} optional: true on insert,
  *       unchanged on update when omitted) -> the stored dto</li>
  *   <li>listEspecialidades: ignored -> {@code ["..."]}</li>
+ *   <li>exportMedicos: {@code {"filter":{...as listMedicos...},"format":"xlsx|pdf"}} -> see {@link Exports}</li>
  * </ul>
  */
 public final class MedicoController implements Controller {
 
-    private final MedicoService medicos;
+    static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.MEDICO, "medicos", "Listado de Médicos",
+        List.of("#", "Documento", "Nombre completo", "Especialidad", "Teléfono", "Email", "Activo"),
+        List.of(1, 3, 6, 4, 3, 5, 1));
 
-    public MedicoController(MedicoService medicos) {
+    private final MedicoService medicos;
+    private final ExportService exports;
+
+    public MedicoController(MedicoService medicos, ExportService exports) {
         this.medicos = medicos;
+        this.exports = exports;
     }
 
     @Override
@@ -37,14 +48,18 @@ public final class MedicoController implements Controller {
         bridge.register("saveMedico", this::save);
         bridge.register("deleteMedico", this::delete);
         bridge.register("listEspecialidades", this::especialidades);
+        bridge.register("exportMedicos", this::export);
+    }
+
+    private static MedicoFilter filter(Map<String, Object> body) {
+        Map<String, Object> f = Payload.optObject(body, "filter");
+        return new MedicoFilter(Payload.optString(f, "especialidad"), Payload.optBoolean(f, "activo"),
+            Payload.optString(f, "texto"));
     }
 
     private Object list(String payload) {
         Map<String, Object> body = Payload.object(payload);
-        Map<String, Object> f = Payload.optObject(body, "filter");
-        MedicoFilter filter = new MedicoFilter(Payload.optString(f, "especialidad"),
-            Payload.optBoolean(f, "activo"), Payload.optString(f, "texto"));
-        return Dtos.toMap(medicos.list(filter, Paging.page(body), Paging.pageSize(body)), Dtos::toMap);
+        return Dtos.toMap(medicos.list(filter(body), Paging.page(body), Paging.pageSize(body)), Dtos::toMap);
     }
 
     private Object get(String payload) {
@@ -64,5 +79,18 @@ public final class MedicoController implements Controller {
     /** The payload is ignored. */
     private Object especialidades(String payload) {
         return medicos.especialidades();
+    }
+
+    private Object export(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        MedicoFilter filter = filter(body);
+        var format = Exports.format(body);
+        return Exports.toMap(exports.export(EXPORT, format, medicos.listForExport(filter).map(MedicoController::row)));
+    }
+
+    private static List<String> row(Medico m) {
+        return List.of(Exports.text(m.id()), Exports.text(m.documento()), m.nombreCompleto(),
+            Exports.text(m.especialidad()), Exports.text(m.telefono()), Exports.text(m.correo()),
+            Exports.yesNo(m.activo()));
     }
 }

@@ -7,15 +7,19 @@ import com.hospisoft.bridge.Bridge;
 import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryAuditoriaRepository;
 import com.hospisoft.dao.UsuarioRepository;
+import com.hospisoft.export.FakeFileSaver;
 import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AppZone;
 import com.hospisoft.service.AuditoriaService;
 import com.hospisoft.service.AuthService;
+import com.hospisoft.service.ExportService;
+import com.hospisoft.service.RecordingAuditLog;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupStatus;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -30,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** The audit list through the async bridge with the in-memory repository (no database). */
 class AuditoriaControllerTest {
@@ -44,7 +49,12 @@ class AuditoriaControllerTest {
     private final SessionHolder sessions = new SessionHolder();
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
     private AuditoriaService service;
+    private FakeFileSaver saver;
+    private RecordingAuditLog exportAudit;
+    private ExportService exports;
     private Bridge bridge;
+    @TempDir
+    Path dir;
     private int sequence;
 
     @BeforeEach
@@ -56,7 +66,10 @@ class AuditoriaControllerTest {
         service.recordFailedLogin("ghost", "Usuario o contraseña incorrectos");
 
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
-        new AuditoriaController(service).register(bridge);
+        saver = new FakeFileSaver(null);
+        exportAudit = new RecordingAuditLog();
+        exports = ControllerTestSupport.exports(saver, exportAudit, sessions);
+        new AuditoriaController(service, exports).register(bridge);
     }
 
     @AfterEach
@@ -91,7 +104,8 @@ class AuditoriaControllerTest {
 
     @Test
     void registersExactlyTheAuditoriaMethods() {
-        assertEquals(Set.of("listAuditoria"), ControllerTestSupport.registeredNames(new AuditoriaController(service)));
+        assertEquals(Set.of("listAuditoria", "exportAuditoria"),
+            ControllerTestSupport.registeredNames(new AuditoriaController(service, exports)));
     }
 
     @Test
@@ -156,5 +170,38 @@ class AuditoriaControllerTest {
         assertEquals(Bridge.FORBIDDEN_MESSAGE, envelope.get("message"));
         sessions.clear();
         assertEquals("FORBIDDEN", invoke("listAuditoria", "{}").get("code"));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportWritesTheFilteredLogNewestFirst() throws Exception {
+        saver.answer(dir.resolve("auditoria.xlsx"));
+        Map<String, Object> result = data(invoke("exportAuditoria", "{\"filter\":{\"desde\":\"2026-11-04\"},\"format\":\"xlsx\"}"));
+        assertEquals(2L, result.get("rows"));
+        assertEquals("auditoria_2026-11-04.xlsx", saver.last().suggestedFileName());
+        List<List<String>> table = ControllerTestSupport.table(dir.resolve("auditoria.xlsx"));
+        assertEquals(List.of(
+            List.of("Fecha", "Usuario", "Rol", "Acción", "Módulo", "Registro", "Detalle"),
+            List.of("2026-11-04 10:00:05", "ghost", "–", "Inicio de sesión fallido", "Sesión", "–",
+                "Usuario o contraseña incorrectos"),
+            List.of("2026-11-04 10:00:05", "admin", "ADMIN", "Crear", "Pacientes", "#20",
+                "Paciente 2001 - Maria Torres")), table);
+
+        RecordingAuditLog.Entry entry = exportAudit.only();
+        assertEquals(AccionAuditoria.EXPORTAR, entry.accion());
+        assertEquals(ModuloAuditoria.AUDITORIA, entry.modulo());
+    }
+
+    @Test
+    void exportIsAdminOnlyAndValidatesFiltersAndFormat() throws Exception {
+        assertEquals("BAD_REQUEST", invoke("exportAuditoria", "{\"format\":\"txt\"}").get("code"));
+        assertEquals("BAD_REQUEST", invoke("exportAuditoria", "{\"filter\":{\"accion\":\"BORRAR\"},\"format\":\"pdf\"}")
+            .get("code"));
+        assertEquals("VALIDATION", invoke("exportAuditoria",
+            "{\"filter\":{\"desde\":\"2026-11-05\",\"hasta\":\"2026-11-01\"},\"format\":\"pdf\"}").get("code"));
+        sessions.set(MEDICO);
+        assertEquals("FORBIDDEN", invoke("exportAuditoria", "{\"format\":\"pdf\"}").get("code"));
+        assertTrue(saver.requests().isEmpty());
     }
 }

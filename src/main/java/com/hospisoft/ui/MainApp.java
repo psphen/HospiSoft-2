@@ -39,6 +39,7 @@ import com.hospisoft.service.CitaService;
 import com.hospisoft.service.DashboardService;
 import com.hospisoft.service.CachedStartupProbe;
 import com.hospisoft.service.DefaultStartupProbe;
+import com.hospisoft.service.ExportService;
 import com.hospisoft.service.MedicamentoService;
 import com.hospisoft.service.MedicoService;
 import com.hospisoft.service.PacienteService;
@@ -151,17 +152,20 @@ public class MainApp extends Application {
         AuditoriaService auditoria = new AuditoriaService(auditoriaRepository, sessions::current, appZone);
         bridge = new Bridge(new AuthService(usuarios, auditoria), sessions, startupProbe, router,
             this::runScriptLater, auditoria);
+        // list exports: the save dialog is owned by the main window and shown on the FX thread
+        ExportService exports = new ExportService(new FxFileSaver(() -> stage), auditoria, sessions::current,
+            clock, appZone);
         List<Controller> controllers = List.of(
-            new MedicoController(new MedicoService(medicos, sessions::current, auditoria)),
-            new PacienteController(new PacienteService(pacientes, sessions::current, auditoria)),
-            new MedicamentoController(new MedicamentoService(medicamentos, sessions::current, auditoria)),
+            new MedicoController(new MedicoService(medicos, sessions::current, auditoria), exports),
+            new PacienteController(new PacienteService(pacientes, sessions::current, auditoria), exports),
+            new MedicamentoController(new MedicamentoService(medicamentos, sessions::current, auditoria), exports),
             new CitaController(new CitaService(citas, medicos, pacientes, sessions::current, clock, appZone,
-                auditoria)),
+                auditoria), exports),
             new AtencionController(new AtencionService(atenciones, citas, medicamentos, pacientes,
                 sessions::current, clock, appZone, auditoria)),
             new DashboardController(new DashboardService(dashboard, medicamentos, sessions::current,
                 clock, appZone)),
-            new AuditoriaController(auditoria));
+            new AuditoriaController(auditoria, exports));
         controllers.forEach(controller -> controller.register(bridge));
         jsApi = new JsApi(bridge); // only the facade is reachable from JavaScript
 

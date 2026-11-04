@@ -1,6 +1,6 @@
 # HospiSoft
 
-Aplicación de escritorio para la gestión de un consultorio médico: usuarios, médicos, pacientes, citas, atención, historias clínicas, recetas, medicamentos y auditoría.
+Aplicación de escritorio para la gestión de un consultorio médico: usuarios, médicos, pacientes, citas, atención, historias clínicas, recetas, medicamentos y auditoría, con exportación de los listados a Excel y PDF.
 
 - **Interfaz**: JavaFX `WebView` que muestra las páginas HTML del proyecto (Bootstrap 5 y Font Awesome empaquetados dentro del jar). Sin servidor web y sin navegador externo.
 - **Lógica de negocio**: Java 21. El JavaScript de las páginas solo llama al puente y actualiza el DOM.
@@ -31,6 +31,8 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 3. La aplicación **nunca** crea el esquema. Al iniciar solo verifica que las tablas existan y, si faltan, lo informa en la pantalla de inicio de sesión.
 
 > **Bases creadas antes de la auditoría**: si su base ya existía, **vuelva a ejecutar `db/schema.sql` completo** en el SQL Editor de Supabase. Solo agrega la tabla `auditoria`, sus índices y su trigger; no toca las tablas ni los datos existentes. Hasta hacerlo, la pantalla de inicio de sesión informa que falta la tabla `auditoria`.
+>
+> **Bases creadas antes de la exportación**: vuelva a ejecutar `db/schema.sql` completo. Las restricciones `CHECK` de `auditoria.accion` y `auditoria.modulo` tienen nombre (`auditoria_accion_check`, `auditoria_modulo_check`) y el script las borra y las vuelve a crear (`DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT`), así que también se amplían en una tabla que ya existía para aceptar `EXPORTAR` y `AUDITORIA`. Si no lo hace, cada exportación funciona pero su registro de auditoría se pierde (la escritura es de mejor esfuerzo y la consola muestra `[audit] could not record EXPORTAR ...`).
 
 ### Tabla `auditoria`
 
@@ -41,13 +43,13 @@ Registro de **solo inserción** de quién hizo qué y cuándo:
 | `id` | `BIGSERIAL` | clave primaria |
 | `fecha` | `TIMESTAMPTZ` | la asigna la base (`DEFAULT now()`) |
 | `id_usuario`, `username`, `rol` | `BIGINT`, `VARCHAR(60)`, `VARCHAR(10)` | copia del usuario de la sesión; en un ingreso fallido solo queda el `username`, y únicamente si corresponde a una cuenta existente |
-| `accion` | `VARCHAR(20)` | `CREAR`, `EDITAR`, `ELIMINAR`, `DESACTIVAR`, `REPROGRAMAR`, `CANCELAR`, `INICIAR_ATENCION`, `FINALIZAR_ATENCION`, `LOGIN`, `LOGIN_FALLIDO`, `LOGOUT` |
-| `modulo` | `VARCHAR(30)` | `PACIENTE`, `MEDICO`, `MEDICAMENTO`, `CITA`, `ATENCION`, `SESION` |
+| `accion` | `VARCHAR(20)` | `CREAR`, `EDITAR`, `ELIMINAR`, `DESACTIVAR`, `REPROGRAMAR`, `CANCELAR`, `INICIAR_ATENCION`, `FINALIZAR_ATENCION`, `LOGIN`, `LOGIN_FALLIDO`, `LOGOUT`, `EXPORTAR` |
+| `modulo` | `VARCHAR(30)` | `PACIENTE`, `MEDICO`, `MEDICAMENTO`, `CITA`, `ATENCION`, `SESION`, `AUDITORIA` |
 | `id_registro` | `BIGINT` | id de la fila afectada (cuando aplica) |
 | `detalle` | `VARCHAR(500)` | texto breve, p. ej. `Cita #12 reprogramada a 2026-11-05 10:00 - …` |
 
 - Los datos del usuario son una **instantánea sin clave foránea**: el registro sobrevive aunque el usuario se elimine.
-- Un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`, igual que en `historia_clinica` y `receta`. Las acciones y módulos están restringidos con `CHECK`.
+- Un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`, igual que en `historia_clinica` y `receta`. Las acciones y módulos están restringidos con `CHECK` con nombre, que el script recrea en cada ejecución.
 - Nunca se guarda la contraseña. Si el usuario escrito no existe (por ejemplo, alguien tecleó su contraseña en el campo de usuario), el registro queda con `username` vacío y el detalle `Usuario inexistente`: el texto ingresado no se almacena. La escritura es de mejor esfuerzo: si falla, la operación del usuario sigue su curso y el error se informa en la consola sin datos de la fila.
 
 **Cadena de conexión**: Supabase → *Connect* → **Session pooler** (puerto **5432**). Se ve así:
@@ -117,13 +119,24 @@ Si el archivo no existe o le faltan claves, la aplicación igual arranca y expli
 
 Genera `target\hospisoft-desktop.jar` (jar ejecutable con todas las dependencias) y ejecuta las pruebas.
 
+### Dependencias de ejecución
+
+| Dependencia | Versión | Licencia | Uso |
+| --- | --- | --- | --- |
+| JavaFX (`javafx-controls`, `javafx-web`) | 21.0.13 | GPL v2 + Classpath Exception | interfaz y `WebView` |
+| PostgreSQL JDBC | 42.7.14 | BSD-2-Clause | acceso a la base |
+| Apache POI (`poi-ooxml`) | 5.4.1 | Apache-2.0 | exportación a Excel (`.xlsx`) |
+| OpenPDF (`com.github.librepdf:openpdf`) | 2.0.3 | LGPL-2.1 / MPL-2.0 | exportación a PDF |
+
+OpenPDF es el *fork* libre de iText 4; **no** se usa iText 5/7, cuya licencia AGPL obligaría a publicar el código de la aplicación. POI arrastra sus dependencias transitivas (`xmlbeans`, `commons-io`, `commons-compress`, `commons-codec`, `commons-collections4`, `commons-math3`, `log4j-api`, …), todas Apache-2.0 o compatibles. POI registra a través de `log4j-api` pero la aplicación no incluye una implementación de Log4j: `src/main/resources/log4j2.component.properties` lo apunta al registrador simple incorporado para evitar el aviso "could not find a logging provider" al arrancar. Con estas bibliotecas el jar ejecutable pasó de unos 48 MB a unos 70 MB.
+
 ### Empaquetado nativo (opcional)
 
 ```powershell
 .\mvnw.cmd clean package -Ppackage-win
 ```
 
-Requiere un JDK 14 o superior, que es el que trae `jpackage`. Usa `jpackage` (incluido en el JDK) para producir `target\dist\HospiSoft\HospiSoft.exe` junto con su propio runtime de Java: el usuario final no necesita tener Java instalado. Es una *app-image*, no un instalador, así que no requiere WiX ni Inno Setup. El perfil usa `exec-maven-plugin`, que es un **plugin de compilación** (como shade, surefire o javafx-maven-plugin): las dependencias de ejecución siguen siendo únicamente JavaFX y el driver de PostgreSQL.
+Requiere un JDK 14 o superior, que es el que trae `jpackage`. Usa `jpackage` (incluido en el JDK) para producir `target\dist\HospiSoft\HospiSoft.exe` junto con su propio runtime de Java: el usuario final no necesita tener Java instalado. Es una *app-image*, no un instalador, así que no requiere WiX ni Inno Setup. El perfil usa `exec-maven-plugin`, que es un **plugin de compilación** (como shade, surefire o javafx-maven-plugin): no agrega nada a las dependencias de ejecución de la tabla anterior.
 
 Dos detalles del perfil:
 
@@ -168,12 +181,15 @@ Las contraseñas se almacenan con PBKDF2WithHmacSHA256, 600 000 iteraciones, sal
 
 ```
 src/main/java/com/hospisoft/
-├── ui/        Launcher (main sin JavaFX), MainApp (Stage + WebView), PageRouter, AuthGuard
+├── ui/        Launcher (main sin JavaFX), MainApp (Stage + WebView), PageRouter, AuthGuard,
+│              FxFileSaver (diálogo "Guardar como" de las exportaciones)
 ├── bridge/    JsApi (lo único visible para JS), Bridge (front controller), Json, Payload, Dtos
 ├── controller/ Controladores MVC por módulo: Paciente, Medico, Cita, Medicamento, Atencion, Dashboard,
 │              Auditoria
 ├── config/    AppConfig (lectura de config.properties)
 ├── db/        ConnectionPool (pool propio), SchemaChecker, SqlErrorClassifier, excepciones
+├── export/    TableExport (tabla neutral), ExcelExporter (POI), PdfExporter (OpenPDF), ExportFormat,
+│              FileSaver (puerto del diálogo de guardado)
 ├── security/  PasswordHasher
 ├── model/     Usuario, Medico, Paciente, Cita, Medicamento, HistoriaClinica, Receta, Auditoria,
 │              vistas y enums (AccionAuditoria, ModuloAuditoria con etiquetas en español)
@@ -181,7 +197,8 @@ src/main/java/com/hospisoft/
 │              Cita, Atencion, Dashboard, Auditoria
 └── service/   AuthService, PageAccess, MedicoService, PacienteService, MedicamentoService,
                CitaService, AtencionService, DashboardService, AuditoriaService (implementa el
-               puerto AuditLog), AppZone, validación y excepciones
+               puerto AuditLog), ExportService y ExportRows (exportación), AppZone, validación y
+               excepciones
 src/main/resources/web/   páginas HTML, css/, js/ y vendor/ (Bootstrap y Font Awesome)
 db/schema.sql             esquema y datos de prueba para Supabase
 ```
@@ -199,9 +216,9 @@ Capas: `ui` → `bridge` → `service` → `dao` → `db`; `model` es compartido
 {"ok":false,"code":"...","message":"...","errors":{"campo":"mensaje"}}
 ```
 
-Códigos: `BAD_REQUEST`, `VALIDATION` (con `errors`), `NOT_FOUND`, `CONFLICT`, `AUTH_FAILED`, `FORBIDDEN`, `DB_UNAVAILABLE`, `DB_AUTH_FAILED`, `INTERNAL_ERROR`.
+Códigos: `BAD_REQUEST`, `VALIDATION` (con `errors`), `NOT_FOUND`, `CONFLICT`, `AUTH_FAILED`, `FORBIDDEN`, `DB_UNAVAILABLE`, `DB_AUTH_FAILED`, `EXPORT_FAILED`, `INTERNAL_ERROR`.
 
-Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, método, payload)` responde de inmediato, ejecuta el trabajo en un hilo propio y entrega el resultado con `window.__hospisoft.resolve(requestId, sobre)`. En JavaScript se usa `HospiSoft.appCall(método, payload)`, que devuelve una `Promise` (rechaza con código `TIMEOUT` a los 40 s). Los métodos síncronos solo sirven para datos en memoria.
+Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, método, payload)` responde de inmediato, ejecuta el trabajo en un hilo propio y entrega el resultado con `window.__hospisoft.resolve(requestId, sobre)`. En JavaScript se usa `HospiSoft.appCall(método, payload)`, que devuelve una `Promise` (rechaza con código `TIMEOUT` a los 40 s; un tercer argumento opcional `{timeoutMs}` lo amplía para una llamada, y las exportaciones lo llevan a 30 minutos porque esperan al diálogo de guardado). Los métodos síncronos solo sirven para datos en memoria.
 
 | Método | Entrada | Salida (`data`) |
 | --- | --- | --- |
@@ -222,6 +239,7 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 | `getHistoriaCita` / `historialPaciente` / `misRecetas` | `{"idCita"}` / `{"idPaciente","page","pageSize"}` / `{"page","pageSize"}` | historia / página de historias / página de recetas |
 | `dashboard` | — | `{rol, kpis, proximasCitas, resumenHoy, atendidasPct, duracionPromedioMin}` |
 | `listAuditoria` (ADMIN) | `{"filter":{"texto","accion","modulo","desde","hasta"},"page","pageSize"}` | página de `{id, fecha, fechaHora, idUsuario, username, rol, accion, accionLabel, modulo, moduloLabel, idRegistro, detalle}`, la más reciente primero |
+| `exportPacientes` / `exportMedicos` / `exportCitas` / `exportMedicamentos` / `exportAuditoria` | `{"filter":{…el mismo del listado…},"format":"xlsx"\|"pdf"}` | `{saved:true, fileName, rows}` o `{saved:false}` si se canceló el diálogo |
 
 ---
 
@@ -262,9 +280,20 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 
 **Auditoría**
 
-- Se registran, solo cuando tienen éxito: crear/editar/eliminar/dar de baja pacientes, médicos y medicamentos (`CREAR` o `EDITAR` según sea alta o modificación; `ELIMINAR` o `DESACTIVAR` según el resultado del borrado), crear/reprogramar/cancelar citas, iniciar/finalizar atenciones, y los ingresos (`LOGIN`), ingresos fallidos por credenciales o bloqueo (`LOGIN_FALLIDO`, con el usuario solo si la cuenta existe) y salidas (`LOGOUT`).
+- Se registran, solo cuando tienen éxito: crear/editar/eliminar/dar de baja pacientes, médicos y medicamentos (`CREAR` o `EDITAR` según sea alta o modificación; `ELIMINAR` o `DESACTIVAR` según el resultado del borrado), crear/reprogramar/cancelar citas, iniciar/finalizar atenciones, las exportaciones guardadas (`EXPORTAR`), y los ingresos (`LOGIN`), ingresos fallidos por credenciales o bloqueo (`LOGIN_FALLIDO`, con el usuario solo si la cuenta existe) y salidas (`LOGOUT`).
 - Una falla al escribir la auditoría **nunca** hace fallar ni revierte la operación del usuario.
 - La página `auditoria.html` es de solo lectura y exclusiva del ADMIN; filtra por texto (usuario o detalle), acción, módulo y rango de fechas (días locales, ambos inclusive).
+
+**Exportación de listados**
+
+- Pacientes, Médicos, Citas, Medicamentos y Auditoría tienen un botón **Exportar** con dos formatos: **Excel (.xlsx)** y **PDF**. Se exporta el resultado completo del **filtro actual**, no solo la página visible.
+- Se aplican exactamente los mismos permisos y el mismo alcance que el listado: el MEDICO exporta solo los pacientes que atendió y sus propias citas, el PACIENTE solo sus citas, y Médicos y Auditoría son solo para ADMIN. Las filas se recorren con la misma paginación del listado (sin SQL nuevo).
+- Límite de **5.000 filas** por archivo. Si el filtro devuelve más, se exportan las primeras 5.000 y el subtítulo del documento lo indica ("Se exportaron los primeros 5000 de N registros").
+- Columnas: las de la tabla de cada página, con valores legibles (fechas y horas en la zona local, estados en español, `Activo` como Sí/No). Cada documento lleva título y el subtítulo "Generado el AAAA-MM-DD HH:MM por *usuario*".
+- Excel: encabezado en negrita con relleno, fijo al desplazarse y con autofiltro; anchos ajustados al contenido (con tope). Todos los valores se escriben como **texto**, nunca como fórmula: un dato como `=cmd|...` no se ejecuta al abrir el archivo.
+- PDF: A4 horizontal, encabezado de la tabla repetido en cada página y pie "Página X de Y". Usa la fuente Helvetica estándar con codificación Windows-1252 (tildes, ñ, ü, ¿, ¡); caracteres fuera de esa codificación, como emojis, no se pueden representar.
+- El diálogo "Guardar como" propone `modulo_AAAA-MM-DD.xlsx|pdf` y abre en `Documentos` (o en la última carpeta usada). El archivo se escribe primero en un temporal de la misma carpeta y luego reemplaza al destino, así que nunca queda a medias. Cancelar no es un error y no muestra nada; si no se puede escribir (carpeta sin permisos, archivo abierto en Excel) aparece un mensaje claro.
+- Cada exportación guardada se registra en la auditoría como `EXPORTAR` en el módulo correspondiente (exportar la auditoría usa el módulo `AUDITORIA`), con un detalle como `Exportación PDF - 37 registro(s)`.
 
 **Tablero**
 
@@ -277,7 +306,7 @@ Todo lo que toca la base de datos va por el camino asíncrono: `call(requestId, 
 ## 9. Pruebas
 
 ```powershell
-.\mvnw.cmd clean package      # compila y ejecuta las 471 pruebas (JUnit 5)
+.\mvnw.cmd clean package      # compila y ejecuta las 494 pruebas (JUnit 5)
 ```
 
 10 de esas pruebas son de integración y se **omiten** salvo que existan las tres variables de entorno siguientes. Cada una corre dentro de una transacción que se revierte, y el caso que sí confirma datos los borra al terminar, así que no dejan rastro:
@@ -318,6 +347,7 @@ La cobertura de integración es **parcial**: verifica que el SQL se ejecute y re
 | 5 | Atención: iniciar/finalizar, historia clínica inmutable y recetas con descuento de stock | Completa |
 | 6 | Tablero con datos reales y empaquetado ejecutable (`jpackage`) | Completa |
 | 7 | Auditoría: registro inmutable de quién hizo qué y cuándo, con página de consulta para ADMIN | Completa |
+| 8 | Exportación de listados a Excel (Apache POI) y PDF (OpenPDF), auditada | Completa |
 
 ---
 

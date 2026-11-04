@@ -12,16 +12,21 @@ import com.hospisoft.dao.InMemoryPacienteRepository;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.model.Cita;
 import com.hospisoft.model.EstadoCita;
+import com.hospisoft.export.FakeFileSaver;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AppZone;
 import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
 import com.hospisoft.service.CitaService;
+import com.hospisoft.service.ExportService;
+import com.hospisoft.service.RecordingAuditLog;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupStatus;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -37,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** End-to-end cita methods through the async bridge with in-memory repositories (fixed clock and zone). */
 class CitaControllerTest {
@@ -54,7 +60,12 @@ class CitaControllerTest {
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
     private InMemoryCitaRepository citas;
     private CitaService service;
+    private FakeFileSaver saver;
+    private RecordingAuditLog exportAudit;
+    private ExportService exports;
     private Bridge bridge;
+    @TempDir
+    Path dir;
     private int sequence;
 
     @BeforeEach
@@ -70,14 +81,18 @@ class CitaControllerTest {
         citas.add(new Cita(2L, 11L, 21L, ZONE.at(TODAY.plusDays(1), LocalTime.of(10, 0)), "Vacuna", EstadoCita.PROGRAMADA, null, null, null));
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
         service = new CitaService(citas, medicos, pacientes, sessions::current, CLOCK, ZONE, AuditLog.NONE);
-        new CitaController(service).register(bridge);
+        saver = new FakeFileSaver(null);
+        exportAudit = new RecordingAuditLog();
+        exports = ControllerTestSupport.exports(saver, exportAudit, sessions);
+        new CitaController(service, exports).register(bridge);
         sessions.set(ADMIN);
     }
 
     @Test
     void registersExactlyTheCitaMethods() {
         assertEquals(Set.of("listCitas", "getCita", "saveCita", "cancelarCita", "agendaMedico",
-            "listMedicosSelect", "listPacientesSelect"), ControllerTestSupport.registeredNames(new CitaController(service)));
+            "listMedicosSelect", "listPacientesSelect", "exportCitas"),
+            ControllerTestSupport.registeredNames(new CitaController(service, exports)));
     }
 
     @AfterEach
@@ -212,5 +227,34 @@ class CitaControllerTest {
         assertEquals("FORBIDDEN", invoke("agendaMedico", "{}").get("code"));
         sessions.clear();
         assertEquals("FORBIDDEN", invoke("listCitas", "{}").get("code"));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportWritesLocalDatesAndEstadoLabels() throws Exception {
+        saver.answer(dir.resolve("citas.xlsx"));
+        Map<String, Object> result = data(invoke("exportCitas", "{\"filter\":{\"rango\":\"TODAS\"},\"format\":\"xlsx\"}"));
+        assertEquals(2L, result.get("rows"));
+        assertEquals("citas_2026-11-04.xlsx", saver.last().suggestedFileName());
+        List<List<String>> table = ControllerTestSupport.table(dir.resolve("citas.xlsx"));
+        assertEquals(List.of("#", "Paciente", "Documento", "Médico", "Especialidad", "Fecha", "Hora", "Estado"),
+            table.get(0));
+        assertTrue(table.contains(List.of("1", "Maria Torres", "2001", "Carlos Garcia", "Medicina General",
+            "2026-10-27", "09:00", "Programada")), table.toString());
+        assertEquals(ModuloAuditoria.CITA, exportAudit.only().modulo());
+    }
+
+    @Test
+    void exportKeepsThePacienteScopeAndRejectsBadInput() throws Exception {
+        sessions.set(MARIA);
+        saver.answer(dir.resolve("mis-citas.pdf"));
+        assertEquals(1L, data(invoke("exportCitas", "{\"filter\":{\"rango\":\"TODAS\"},\"format\":\"pdf\"}")).get("rows"));
+        assertEquals("BAD_REQUEST", invoke("exportCitas", "{\"filter\":{\"estado\":\"PERDIDA\"},\"format\":\"pdf\"}")
+            .get("code"));
+        assertEquals("BAD_REQUEST", invoke("exportCitas", "{\"format\":7}").get("code"));
+        sessions.clear();
+        assertEquals("FORBIDDEN", invoke("exportCitas", "{\"format\":\"pdf\"}").get("code"));
+        assertEquals(1, saver.requests().size());
     }
 }

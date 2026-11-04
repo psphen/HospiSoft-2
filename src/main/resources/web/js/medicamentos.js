@@ -365,6 +365,8 @@
     if (rol === 'PACIENTE') {
       loadOrdenes(1);
     } else {
+      /* patients see their orders, not the inventory list, so only the other roles export it */
+      crud.bindExport({ method: 'exportMedicamentos', filter: currentFilter });
       load(1);
     }
   });

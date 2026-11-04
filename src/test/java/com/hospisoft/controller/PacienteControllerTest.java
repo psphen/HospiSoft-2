@@ -7,14 +7,20 @@ import com.hospisoft.bridge.Bridge;
 import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryPacienteRepository;
 import com.hospisoft.dao.UsuarioRepository;
+import com.hospisoft.export.FakeFileSaver;
+import com.hospisoft.model.AccionAuditoria;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
+import com.hospisoft.service.ExportService;
 import com.hospisoft.service.PacienteService;
+import com.hospisoft.service.RecordingAuditLog;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupStatus;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** End-to-end paciente methods through the async bridge with the in-memory repository (no database). */
 class PacienteControllerTest {
@@ -43,7 +50,12 @@ class PacienteControllerTest {
     private final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
     private InMemoryPacienteRepository pacientes;
     private PacienteService service;
+    private FakeFileSaver saver;
+    private RecordingAuditLog exportAudit;
+    private ExportService exports;
     private Bridge bridge;
+    @TempDir
+    Path dir;
     private int sequence;
 
     @BeforeEach
@@ -56,7 +68,10 @@ class PacienteControllerTest {
 
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, scripts::add);
         service = new PacienteService(pacientes, sessions::current, CLOCK, AuditLog.NONE);
-        new PacienteController(service).register(bridge);
+        saver = new FakeFileSaver(null);
+        exportAudit = new RecordingAuditLog();
+        exports = ControllerTestSupport.exports(saver, exportAudit, sessions);
+        new PacienteController(service, exports).register(bridge);
         sessions.set(ADMIN);
     }
 
@@ -93,8 +108,8 @@ class PacienteControllerTest {
 
     @Test
     void registersExactlyThePacienteMethods() {
-        assertEquals(Set.of("listPacientes", "getPaciente", "savePaciente", "deletePaciente"),
-            ControllerTestSupport.registeredNames(new PacienteController(service)));
+        assertEquals(Set.of("listPacientes", "getPaciente", "savePaciente", "deletePaciente", "exportPacientes"),
+            ControllerTestSupport.registeredNames(new PacienteController(service, exports)));
     }
 
     @Test
@@ -147,5 +162,56 @@ class PacienteControllerTest {
             assertEquals("FORBIDDEN", envelope.get("code"), method);
             assertEquals(Bridge.FORBIDDEN_MESSAGE, envelope.get("message"));
         }
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportWritesTheFilteredListWithReadableValues() throws Exception {
+        saver.answer(dir.resolve("pacientes.xlsx"));
+        Map<String, Object> result = data(invoke("exportPacientes", "{\"filter\":{\"sexo\":\"F\"},\"format\":\"xlsx\"}"));
+        assertEquals(Map.of("saved", true, "fileName", "pacientes.xlsx", "rows", 2L), result);
+        assertEquals("pacientes_2026-11-04.xlsx", saver.last().suggestedFileName());
+
+        List<List<String>> table = ControllerTestSupport.table(dir.resolve("pacientes.xlsx"));
+        assertEquals(List.of("#", "Documento", "Nombre completo", "Edad", "Género", "Teléfono", "Email", "Activo"),
+            table.get(0));
+        assertEquals(3, table.size(), "header plus the two women");
+        assertTrue(table.contains(List.of("20", "2001", "Maria Torres", "36", "Femenino", "", "", "Sí")), table.toString());
+
+        RecordingAuditLog.Entry entry = exportAudit.only();
+        assertEquals(AccionAuditoria.EXPORTAR, entry.accion());
+        assertEquals(ModuloAuditoria.PACIENTE, entry.modulo());
+        assertEquals("Exportación Excel - 2 registro(s)", entry.detalle());
+    }
+
+    @Test
+    void exportKeepsTheMedicoScopeAndHandlesCancel() throws Exception {
+        sessions.set(MEDICO);
+        saver.answer(dir.resolve("mios.pdf"));
+        assertEquals(1L, data(invoke("exportPacientes", "{\"format\":\"PDF\"}")).get("rows"),
+            "a medico exports only the patients it attended");
+
+        saver.answer(null);
+        assertEquals(Map.of("saved", false), data(invoke("exportPacientes", "{\"format\":\"pdf\"}")));
+        assertEquals(1, exportAudit.entries().size(), "a cancelled dialog is not audited");
+    }
+
+    @Test
+    void exportRejectsBadFormatsAndForbiddenRolesBeforeTheDialog() throws Exception {
+        assertEquals("BAD_REQUEST", invoke("exportPacientes", "{\"format\":\"csv\"}").get("code"));
+        assertEquals("BAD_REQUEST", invoke("exportPacientes", "{}").get("code"));
+        sessions.set(PACIENTE);
+        assertEquals("FORBIDDEN", invoke("exportPacientes", "{\"format\":\"xlsx\"}").get("code"));
+        assertTrue(saver.requests().isEmpty(), "the save dialog never opened");
+    }
+
+    @Test
+    void aFileThatCannotBeWrittenIsAnExportFailedEnvelope() throws Exception {
+        saver.answer(dir.resolve("no-existe").resolve("pacientes.xlsx"));
+        Map<String, Object> envelope = invoke("exportPacientes", "{\"format\":\"xlsx\"}");
+        assertEquals("EXPORT_FAILED", envelope.get("code"));
+        assertEquals(com.hospisoft.service.ExportFailedException.WRITE_FAILED, envelope.get("message"));
+        assertTrue(exportAudit.entries().isEmpty(), "nothing was exported");
     }
 }

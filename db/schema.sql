@@ -10,13 +10,16 @@
 --
 -- UPGRADING AN EXISTING DATABASE
 --   Databases created before the audit log only lack table auditoria: re-run this
---   whole file. Existing tables, rows and policies are left untouched.
+--   whole file. Existing tables, rows and policies are left untouched; only the
+--   CHECK constraints on auditoria.accion / auditoria.modulo are recreated so they
+--   accept the codes added later (EXPORTAR, AUDITORIA).
 --
 -- IDEMPOTENCY
 --   Tables use CREATE TABLE IF NOT EXISTS, seeds use ON CONFLICT DO NOTHING on
 --   natural keys (username, documento, codigo). Appointments and clinical records
 --   are seeded only when the referenced rows are present and not already seeded.
---   Functions use CREATE OR REPLACE and triggers/policies are dropped and recreated.
+--   Functions use CREATE OR REPLACE and triggers/policies are dropped and recreated,
+--   as are the named CHECK constraints on auditoria.accion and auditoria.modulo.
 --
 -- TEST CREDENTIALS (plaintext, for the seed below)
 --   username    password        rol        linked to
@@ -139,14 +142,25 @@ CREATE TABLE IF NOT EXISTS auditoria (
     id_usuario  BIGINT       NULL,
     username    VARCHAR(60)  NULL,
     rol         VARCHAR(10)  NULL CHECK (rol IN ('ADMIN', 'MEDICO', 'PACIENTE')),
-    accion      VARCHAR(20)  NOT NULL
-                CHECK (accion IN ('CREAR', 'EDITAR', 'ELIMINAR', 'DESACTIVAR', 'REPROGRAMAR', 'CANCELAR',
-                                  'INICIAR_ATENCION', 'FINALIZAR_ATENCION', 'LOGIN', 'LOGIN_FALLIDO', 'LOGOUT')),
-    modulo      VARCHAR(30)  NOT NULL
-                CHECK (modulo IN ('PACIENTE', 'MEDICO', 'MEDICAMENTO', 'CITA', 'ATENCION', 'SESION')),
+    accion      VARCHAR(20)  NOT NULL,
+    modulo      VARCHAR(30)  NOT NULL,
     id_registro BIGINT       NULL,
     detalle     VARCHAR(500) NULL
 );
+
+-- The accepted accion / modulo codes grow with the application, so their CHECK
+-- constraints are named and recreated on every run: CREATE TABLE IF NOT EXISTS
+-- would leave an old list in place on an existing database. The names are the
+-- ones PostgreSQL gave the former inline column checks, so those are replaced too.
+-- Adding the constraint validates the existing rows, which only use older codes.
+ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS auditoria_accion_check;
+ALTER TABLE auditoria ADD CONSTRAINT auditoria_accion_check
+    CHECK (accion IN ('CREAR', 'EDITAR', 'ELIMINAR', 'DESACTIVAR', 'REPROGRAMAR', 'CANCELAR',
+                      'INICIAR_ATENCION', 'FINALIZAR_ATENCION', 'LOGIN', 'LOGIN_FALLIDO', 'LOGOUT',
+                      'EXPORTAR'));
+ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS auditoria_modulo_check;
+ALTER TABLE auditoria ADD CONSTRAINT auditoria_modulo_check
+    CHECK (modulo IN ('PACIENTE', 'MEDICO', 'MEDICAMENTO', 'CITA', 'ATENCION', 'SESION', 'AUDITORIA'));
 
 -- ----------------------------------------------------------------------------
 -- Indexes

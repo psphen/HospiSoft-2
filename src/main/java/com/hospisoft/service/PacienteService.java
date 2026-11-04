@@ -69,6 +69,11 @@ public final class PacienteService {
         return pacientes.findPage(safe, page, pageSize);
     }
 
+    /** Every row {@link #list} would page through (same permission and MEDICO scope), up to the export cap. */
+    public ExportRows<Paciente> listForExport(PacienteFilter filter) {
+        return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
+    }
+
     public Paciente get(long id) {
         SessionContext session = access.require(Rol.ADMIN, Rol.MEDICO);
         Optional<Paciente> found = session.rol() == Rol.MEDICO

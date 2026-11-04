@@ -266,4 +266,19 @@ class MedicamentoServiceTest {
         assertEquals(List.of("Acetaminofen", "Ibuprofeno", "Loratadina"),
             repository.findAllActive().stream().map(Medicamento::nombre).toList());
     }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheSameFilterAsTheListForEveryRole() {
+        MedicamentoFilter bajos = new MedicamentoFilter(null, null, StockState.STOCK_BAJO);
+        for (SessionContext role : List.of(ADMIN, MEDICO, PACIENTE)) {
+            current = role;
+            ExportRows<Medicamento> rows = service.listForExport(bajos);
+            assertEquals(service.list(bajos, 1, 100).items(), rows.items(), role.username());
+            assertEquals(List.of("MED-002"), rows.items().stream().map(Medicamento::codigo).toList());
+        }
+        current = null;
+        assertThrows(PermissionException.class, () -> service.listForExport(MedicamentoFilter.NONE));
+    }
 }

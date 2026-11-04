@@ -17,6 +17,8 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <javafx.version>21.0.13</javafx.version>
     <postgresql.version>42.7.14</postgresql.version>
+    <poi.version>5.4.1</poi.version>
+    <openpdf.version>2.0.3</openpdf.version>
     <junit.version>5.11.3</junit.version>
     <main.class>com.hospisoft.ui.Launcher</main.class>
   </properties>
@@ -39,6 +41,18 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>${postgresql.version}</version>
+    </dependency>
+
+    <!-- Runtime: list export. Apache POI (Apache-2.0) writes .xlsx; OpenPDF (LGPL-2.1/MPL-2.0) writes PDF. -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>${poi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.github.librepdf</groupId>
+      <artifactId>openpdf</artifactId>
+      <version>${openpdf.version}</version>
     </dependency>
 
     <!-- Test only -->
@@ -96,6 +110,7 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>module-info.class</exclude>
+                    <exclude>META-INF/versions/*/module-info.class</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -118,8 +133,8 @@
       Native app-image built with the JDK's own jpackage (no installer, so no WiX/Inno needed):
           mvnw.cmd clean package -Ppackage-win
       produces target/dist/HospiSoft/HospiSoft.exe. exec-maven-plugin is a BUILD plugin, like
-      shade, surefire and javafx-maven-plugin: the runtime dependency rule (JavaFX + PostgreSQL
-      only) is untouched, nothing is added to the application classpath.
+      shade, surefire and javafx-maven-plugin: the runtime dependencies (JavaFX, PostgreSQL, POI,
+      OpenPDF) are untouched, nothing is added to the application classpath.
     -->
     <profile>
       <id>package-win</id>

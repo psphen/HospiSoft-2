@@ -47,6 +47,11 @@ public final class MedicamentoService {
         return medicamentos.findPage(safe, page, pageSize);
     }
 
+    /** Every row {@link #list} would page through (same permission), up to the export cap. */
+    public ExportRows<Medicamento> listForExport(MedicamentoFilter filter) {
+        return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
+    }
+
     public Medicamento get(long id) {
         access.require(Rol.ADMIN, Rol.MEDICO, Rol.PACIENTE);
         return medicamentos.findById(id).orElseThrow(() -> new NotFoundException("Medicamento " + id + " not found"));

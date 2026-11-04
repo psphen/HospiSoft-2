@@ -6,10 +6,14 @@ import com.hospisoft.bridge.Dtos;
 import com.hospisoft.bridge.Payload;
 import com.hospisoft.dao.MedicamentoFilter;
 import com.hospisoft.model.Medicamento;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.StockState;
+import com.hospisoft.service.ExportService;
+import com.hospisoft.service.ExportSpec;
 import com.hospisoft.service.MedicamentoInput;
 import com.hospisoft.service.MedicamentoService;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -21,14 +25,26 @@ import java.util.Map;
  * {@code {"filter":{"texto","activo","stockState"},"page","pageSize"}}, get/delete {@code {"id"}},
  * save = dto ({@code activo} optional; on update {@code stockExpected} = the stock loaded into the
  * form, else VALIDATION on stock; a changed stock answers CONFLICT). DTO adds the derived
- * {@code stockState}.
+ * {@code stockState}. exportMedicamentos takes the list filter plus {@code "format":"xlsx|pdf"}
+ * (see {@link Exports}).
  */
 public final class MedicamentoController implements Controller {
 
-    private final MedicamentoService medicamentos;
+    static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.MEDICAMENTO, "medicamentos",
+        "Inventario de Medicamentos",
+        List.of("#", "Código", "Nombre", "Presentación", "Stock", "Stock mín.", "Estado", "Activo"),
+        List.of(1, 2, 6, 4, 1, 1, 2, 1));
+    private static final Map<StockState, String> STOCK_LABEL = Map.of(
+        StockState.DISPONIBLE, "Disponible",
+        StockState.STOCK_BAJO, "Stock bajo",
+        StockState.AGOTADO, "Agotado");
 
-    public MedicamentoController(MedicamentoService medicamentos) {
+    private final MedicamentoService medicamentos;
+    private final ExportService exports;
+
+    public MedicamentoController(MedicamentoService medicamentos, ExportService exports) {
         this.medicamentos = medicamentos;
+        this.exports = exports;
     }
 
     @Override
@@ -37,15 +53,33 @@ public final class MedicamentoController implements Controller {
         bridge.register("getMedicamento", this::get);
         bridge.register("saveMedicamento", this::save);
         bridge.register("deleteMedicamento", this::delete);
+        bridge.register("exportMedicamentos", this::export);
+    }
+
+    private static MedicamentoFilter filter(Map<String, Object> body) {
+        Map<String, Object> f = Payload.optObject(body, "filter");
+        return new MedicamentoFilter(Payload.optString(f, "texto"), Payload.optBoolean(f, "activo"),
+            stockState(Payload.optString(f, "stockState")));
     }
 
     private Object list(String payload) {
         Map<String, Object> body = Payload.object(payload);
-        Map<String, Object> f = Payload.optObject(body, "filter");
-        MedicamentoFilter filter = new MedicamentoFilter(Payload.optString(f, "texto"),
-            Payload.optBoolean(f, "activo"), stockState(Payload.optString(f, "stockState")));
-        return Dtos.toMap(medicamentos.list(filter, Paging.page(body), Paging.pageSize(body)),
+        return Dtos.toMap(medicamentos.list(filter(body), Paging.page(body), Paging.pageSize(body)),
             MedicamentoController::toMap);
+    }
+
+    private Object export(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        MedicamentoFilter filter = filter(body);
+        var format = Exports.format(body);
+        return Exports.toMap(exports.export(EXPORT, format,
+            medicamentos.listForExport(filter).map(MedicamentoController::row)));
+    }
+
+    private static List<String> row(Medicamento m) {
+        return List.of(Exports.text(m.id()), Exports.text(m.codigo()), Exports.text(m.nombre()),
+            Exports.text(m.presentacion()), String.valueOf(m.stock()), String.valueOf(m.stockMinimo()),
+            STOCK_LABEL.get(m.stockState()), Exports.yesNo(m.activo()));
     }
 
     private Object get(String payload) {

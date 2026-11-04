@@ -10,7 +10,8 @@ public enum ModuloAuditoria {
     MEDICAMENTO("Medicamentos"),
     CITA("Citas"),
     ATENCION("Atención"),
-    SESION("Sesión");
+    SESION("Sesión"),
+    AUDITORIA("Auditoría");
 
     private final String label;
 

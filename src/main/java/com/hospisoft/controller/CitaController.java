@@ -7,6 +7,7 @@ import com.hospisoft.bridge.Payload;
 import com.hospisoft.model.CitaView;
 import com.hospisoft.model.EstadoCita;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.service.Agenda;
 import com.hospisoft.service.AppZone;
@@ -14,6 +15,8 @@ import com.hospisoft.service.CitaFilter;
 import com.hospisoft.service.CitaInput;
 import com.hospisoft.service.CitaRango;
 import com.hospisoft.service.CitaService;
+import com.hospisoft.service.ExportService;
+import com.hospisoft.service.ExportSpec;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -27,7 +30,8 @@ import java.util.Map;
  * MVC controller of the cita module: receives the View's request from the JS bridge, parses the
  * payload, delegates to {@link CitaService} (the Model) and returns the DTO.
  *
- * <p>listCitas {@code {"filter":{"texto","fecha":"yyyy-MM-dd","estado","idMedico","rango"},"page","pageSize"}};
+ * <p>listCitas {@code {"filter":{"texto","fecha":"yyyy-MM-dd","estado","idMedico","rango"},"page","pageSize"}}
+ * (exportCitas takes the same filter plus {@code "format":"xlsx|pdf"}, see {@link Exports});
  * getCita / cancelarCita {@code {"id"}}; saveCita {@code {"id":0|N,"idMedico","idPaciente","fecha","hora","motivo"}}
  * (id &gt; 0 reschedules); agendaMedico {@code {"idMedico"?,"fecha"?}}; listMedicosSelect / listPacientesSelect
  * (ADMIN). When {@code filter.fecha} is present the {@code rango} preset is ignored. Agenda slots carry
@@ -42,10 +46,21 @@ public final class CitaController implements Controller {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
-    private final CitaService citas;
+    static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.CITA, "citas", "Listado de Citas",
+        List.of("#", "Paciente", "Documento", "Médico", "Especialidad", "Fecha", "Hora", "Estado"),
+        List.of(1, 5, 3, 5, 4, 2, 1, 2));
+    private static final Map<EstadoCita, String> ESTADO_LABEL = Map.of(
+        EstadoCita.PROGRAMADA, "Programada",
+        EstadoCita.EN_CURSO, "En curso",
+        EstadoCita.FINALIZADA, "Finalizada",
+        EstadoCita.CANCELADA, "Cancelada");
 
-    public CitaController(CitaService citas) {
+    private final CitaService citas;
+    private final ExportService exports;
+
+    public CitaController(CitaService citas, ExportService exports) {
         this.citas = citas;
+        this.exports = exports;
     }
 
     @Override
@@ -57,16 +72,36 @@ public final class CitaController implements Controller {
         bridge.register("agendaMedico", this::agenda);
         bridge.register("listMedicosSelect", this::medicosForSelect);
         bridge.register("listPacientesSelect", this::pacientesForSelect);
+        bridge.register("exportCitas", this::export);
+    }
+
+    private static CitaFilter filter(Map<String, Object> body) {
+        Map<String, Object> f = Payload.optObject(body, "filter");
+        return new CitaFilter(Payload.optString(f, "texto"), Payload.optDate(f, "fecha"),
+            estado(Payload.optString(f, "estado")), Payload.optLong(f, "idMedico"),
+            rango(Payload.optString(f, "rango")));
     }
 
     private Object list(String payload) {
         Map<String, Object> body = Payload.object(payload);
-        Map<String, Object> f = Payload.optObject(body, "filter");
-        CitaFilter filter = new CitaFilter(Payload.optString(f, "texto"), Payload.optDate(f, "fecha"),
-            estado(Payload.optString(f, "estado")), Payload.optLong(f, "idMedico"),
-            rango(Payload.optString(f, "rango")));
-        return Dtos.toMap(citas.list(filter, Paging.page(body), Paging.pageSize(body)),
+        return Dtos.toMap(citas.list(filter(body), Paging.page(body), Paging.pageSize(body)),
             view -> toMap(view, citas.zone()));
+    }
+
+    private Object export(String payload) {
+        Map<String, Object> body = Payload.object(payload);
+        CitaFilter filter = filter(body);
+        var format = Exports.format(body);
+        AppZone zone = citas.zone();
+        return Exports.toMap(exports.export(EXPORT, format, citas.listForExport(filter).map(v -> row(v, zone))));
+    }
+
+    private static List<String> row(CitaView view, AppZone zone) {
+        var c = view.cita();
+        return List.of(Exports.text(c.id()), view.pacienteNombre(), Exports.text(view.pacienteDocumento()),
+            view.medicoNombre(), Exports.text(view.especialidad()),
+            zone.dateOf(c.fechaHoraProgramada()).toString(), zone.timeOf(c.fechaHoraProgramada()).format(TIME),
+            ESTADO_LABEL.getOrDefault(c.estado(), Exports.text(c.estado())));
     }
 
     private Object get(String payload) {

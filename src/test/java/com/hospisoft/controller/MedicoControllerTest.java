@@ -8,14 +8,19 @@ import com.hospisoft.bridge.Bridge;
 import com.hospisoft.bridge.Json;
 import com.hospisoft.dao.InMemoryMedicoRepository;
 import com.hospisoft.dao.UsuarioRepository;
+import com.hospisoft.export.FakeFileSaver;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Rol;
 import com.hospisoft.service.AuditLog;
 import com.hospisoft.service.AuthService;
+import com.hospisoft.service.ExportService;
 import com.hospisoft.service.MedicoService;
+import com.hospisoft.service.RecordingAuditLog;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupStatus;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** End-to-end medico methods through the async bridge with the in-memory repository (no database). */
 class MedicoControllerTest {
@@ -50,7 +56,12 @@ class MedicoControllerTest {
     private final QueueSink sink = new QueueSink();
     private InMemoryMedicoRepository medicos;
     private MedicoService service;
+    private FakeFileSaver saver;
+    private RecordingAuditLog exportAudit;
+    private ExportService exports;
     private Bridge bridge;
+    @TempDir
+    Path dir;
     private int sequence;
 
     @BeforeEach
@@ -63,7 +74,10 @@ class MedicoControllerTest {
 
         bridge = new Bridge(new AuthService(NO_USERS), sessions, StartupStatus::ok, page -> { }, sink);
         service = new MedicoService(medicos, sessions::current, AuditLog.NONE);
-        new MedicoController(service).register(bridge);
+        saver = new FakeFileSaver(null);
+        exportAudit = new RecordingAuditLog();
+        exports = ControllerTestSupport.exports(saver, exportAudit, sessions);
+        new MedicoController(service, exports).register(bridge);
         sessions.set(ADMIN);
     }
 
@@ -100,8 +114,9 @@ class MedicoControllerTest {
 
     @Test
     void registersExactlyTheMedicoMethods() {
-        assertEquals(Set.of("listMedicos", "getMedico", "saveMedico", "deleteMedico", "listEspecialidades"),
-            ControllerTestSupport.registeredNames(new MedicoController(service)));
+        assertEquals(Set.of("listMedicos", "getMedico", "saveMedico", "deleteMedico", "listEspecialidades",
+                "exportMedicos"),
+            ControllerTestSupport.registeredNames(new MedicoController(service, exports)));
     }
 
     @Test
@@ -240,5 +255,36 @@ class MedicoControllerTest {
         Map<String, Object> beyond = data(invoke("listMedicos", "{\"page\":4,\"pageSize\":5}"));
         assertEquals(0, items(beyond).size());
         assertEquals(12L, beyond.get("total"));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportWritesEveryMatchingMedicoNotJustOnePage() throws Exception {
+        saver.answer(dir.resolve("medicos.pdf"));
+        Map<String, Object> all = data(invoke("exportMedicos", "{\"format\":\"pdf\",\"page\":2,\"pageSize\":5}"));
+        assertEquals(12L, all.get("rows"), "paging fields are ignored: the export covers the whole filter");
+        assertEquals("medicos_2026-11-04.pdf", saver.last().suggestedFileName());
+        assertEquals("Exportación PDF - 12 registro(s)", exportAudit.last().detalle());
+        assertEquals(ModuloAuditoria.MEDICO, exportAudit.last().modulo());
+
+        saver.answer(dir.resolve("pediatras.xlsx"));
+        Map<String, Object> pediatras = data(invoke("exportMedicos",
+            "{\"filter\":{\"especialidad\":\"Pediatria\",\"activo\":true},\"format\":\"xlsx\"}"));
+        assertEquals(5L, pediatras.get("rows"));
+        List<List<String>> table = ControllerTestSupport.table(dir.resolve("pediatras.xlsx"));
+        assertEquals(List.of("#", "Documento", "Nombre completo", "Especialidad", "Teléfono", "Email", "Activo"),
+            table.get(0));
+        List<String> second = table.stream().filter(r -> r.get(1).equals("1002")).findFirst().orElseThrow();
+        assertEquals(List.of("Nombre2 Apellido02", "Pediatria", "", "", "Sí"), second.subList(2, 7));
+    }
+
+    @Test
+    void exportIsAdminOnlyAndValidatesTheFormat() throws Exception {
+        assertEquals("BAD_REQUEST", invoke("exportMedicos", "{\"format\":\"docx\"}").get("code"));
+        sessions.set(MEDICO);
+        assertEquals("FORBIDDEN", invoke("exportMedicos", "{\"format\":\"xlsx\"}").get("code"));
+        assertTrue(saver.requests().isEmpty());
+        assertTrue(exportAudit.entries().isEmpty());
     }
 }

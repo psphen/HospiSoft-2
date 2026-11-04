@@ -59,8 +59,16 @@
             <h4 class="mb-0 fw-semibold">Auditoría</h4>
             <small class="text-muted">Registro de solo lectura: quién hizo qué y cuándo</small>
           </div>
-          <!-- Header actions (e.g. export) go here; the audit log itself is read-only. -->
-          <div class="d-flex gap-2" id="header-actions"></div>
+          <!-- Header actions (export); the audit log itself is read-only. -->
+          <div class="d-flex gap-2" id="header-actions">
+            <div class="dropdown d-none" id="export-menu">
+              <button class="btn btn-outline-primary dropdown-toggle" type="button" id="btn-export" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-file-export me-1"></i> Exportar</button>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="btn-export">
+                <li><button class="dropdown-item" type="button" data-export-format="xlsx"><i class="fas fa-file-excel me-2 text-success"></i>Excel (.xlsx)</button></li>
+                <li><button class="dropdown-item" type="button" data-export-format="pdf"><i class="fas fa-file-pdf me-2 text-danger"></i>PDF</button></li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3 p-3 bg-white rounded-3 shadow-sm">
@@ -81,6 +89,7 @@
             <option value="LOGIN">Inicio de sesión</option>
             <option value="LOGIN_FALLIDO">Inicio de sesión fallido</option>
             <option value="LOGOUT">Cierre de sesión</option>
+            <option value="EXPORTAR">Exportar</option>
           </select>
           <select class="form-select" id="filter-modulo" style="max-width:170px;" aria-label="Módulo">
             <option value="">Todos los módulos</option>
@@ -90,6 +99,7 @@
             <option value="CITA">Citas</option>
             <option value="ATENCION">Atención</option>
             <option value="SESION">Sesión</option>
+            <option value="AUDITORIA">Auditoría</option>
           </select>
           <div class="d-flex align-items-center gap-1">
             <label class="small text-muted" for="filter-desde">Desde</label>

@@ -255,4 +255,20 @@ class MedicoServiceTest {
     void deleteUnknownIsNotFound() {
         assertThrows(NotFoundException.class, () -> service.delete(999));
     }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheSameFilterAsTheListAndIsAdminOnly() {
+        MedicoFilter activos = new MedicoFilter(null, true, null);
+        ExportRows<Medico> rows = service.listForExport(activos);
+        assertEquals(service.list(activos, 1, 100).items(), rows.items());
+        assertEquals(List.of(10L, 11L), rows.items().stream().map(Medico::id).sorted().toList());
+        assertEquals(3, service.listForExport(null).items().size());
+
+        current = MEDICO;
+        assertThrows(PermissionException.class, () -> service.listForExport(MedicoFilter.NONE));
+        current = PACIENTE;
+        assertThrows(PermissionException.class, () -> service.listForExport(MedicoFilter.NONE));
+    }
 }

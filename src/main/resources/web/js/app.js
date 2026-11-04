@@ -9,7 +9,8 @@
  * Two calling styles:
  *   HospiSoft.call(method, ...args)      synchronous, for in-memory methods (getSession, logout, navigate,
  *                                        getAllowedPages, cached getStartupStatus)
- *   HospiSoft.appCall(method, payload)   asynchronous (Promise), for anything that touches the database
+ *   HospiSoft.appCall(method, payload[, {timeoutMs}])
+ *                                        asynchronous (Promise), for anything that touches the database
  *                                        (login, fresh getStartupStatus). Java answers later through
  *                                        window.__hospisoft.resolve(requestId, envelopeJson).
  */
@@ -110,10 +111,12 @@
 
   /*
    * Asynchronous bridge call. Resolves with the envelope; rejects with an Error (code TIMEOUT)
-   * when Java does not answer within ASYNC_TIMEOUT_MS, or with code NO_BRIDGE / BAD_REQUEST
-   * when the request could not even be queued.
+   * when Java does not answer within ASYNC_TIMEOUT_MS (or options.timeoutMs when given, e.g. for
+   * exports that wait on a save dialog), or with code NO_BRIDGE / BAD_REQUEST when the request
+   * could not even be queued.
    */
-  function appCall(method, payload) {
+  function appCall(method, payload, options) {
+    var timeoutMs = options && options.timeoutMs > 0 ? options.timeoutMs : ASYNC_TIMEOUT_MS;
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++sequence) + '-' + Date.now();
       var body = payload == null ? '' : (typeof payload === 'string' ? payload : JSON.stringify(payload));
@@ -131,7 +134,7 @@
           var timeout = new Error('Sin respuesta de la aplicación');
           timeout.code = 'TIMEOUT';
           reject(timeout);
-        }, ASYNC_TIMEOUT_MS)
+        }, timeoutMs)
       };
     });
   }

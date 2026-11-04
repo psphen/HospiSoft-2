@@ -325,4 +325,31 @@ class PacienteServiceTest {
         Paciente unknown = new Paciente(3L, "3", "A", "B", null, "F", null, null, null, true);
         assertNull(unknown.edad(LocalDate.of(2026, 1, 1)));
     }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheSameFilterAndScopeAsTheList() {
+        PacienteFilter mujeres = new PacienteFilter("F", null, null);
+        ExportRows<Paciente> rows = service.listForExport(mujeres);
+        assertEquals(service.list(mujeres, 1, 100).items(), rows.items());
+        assertEquals(2, rows.total());
+        assertFalse(rows.truncated());
+
+        current = MEDICO;
+        assertEquals(java.util.List.of(20L, 23L),
+            service.listForExport(null).items().stream().map(Paciente::id).sorted().toList(),
+            "a medico exports only the patients it attended");
+    }
+
+    @Test
+    void exportIsForbiddenWhereTheListIs() {
+        current = PACIENTE;
+        assertThrows(PermissionException.class, () -> service.listForExport(PacienteFilter.NONE));
+        current = null;
+        assertThrows(PermissionException.class, () -> service.listForExport(PacienteFilter.NONE));
+        current = ADMIN;
+        assertThrows(ValidationException.class,
+            () -> service.listForExport(new PacienteFilter(null, null, "x".repeat(1000))));
+    }
 }
