@@ -397,7 +397,7 @@ class BridgeTest {
         Map<String, Object> envelope = envelopeOf(sink.await(), "r2");
         assertEquals(true, envelope.get("ok"));
         assertEquals("admin", ((Map<String, Object>) envelope.get("data")).get("username"));
-        assertTrue(sessions.isLoggedIn());
+        assertTrue(sessions.current().isPresent());
     }
 
     @Test

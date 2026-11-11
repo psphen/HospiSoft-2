@@ -139,7 +139,7 @@ class PostgresIntegrationTest {
             assertEquals(historia, stored.historia().id());
             assertEquals(1, stored.recetas().size());
             assertEquals(4, stored.recetas().get(0).receta().cantidad());
-            assertEquals(1, dao.findRecetasByHistoria(historia).size());
+            assertEquals(1, dao.findHistoriaById(historia).orElseThrow().recetas().size());
             Page<HistoriaView> page = dao.findHistoriasPage(new HistoriaQuery(paciente, medico, "dx"), 1, 10);
             assertEquals(1, page.total());
             assertEquals(1, dao.findRecetasPage(paciente, 1, 10).total());

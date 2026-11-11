@@ -196,7 +196,7 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
     private HistoriaView view(HistoriaClinica h, boolean withRecetas) {
         Medico m = medicos.findById(h.idMedico()).orElseThrow();
         Paciente p = pacientes.findById(h.idPaciente()).orElseThrow();
-        List<RecetaView> lines = withRecetas ? findRecetasByHistoria(h.id()) : List.of();
+        List<RecetaView> lines = withRecetas ? recetaViewsOf(h.id()) : List.of();
         return new HistoriaView(h, m.nombres(), m.apellidos(), m.especialidad(), p.nombres(), p.apellidos(),
             p.documento(), lines);
     }
@@ -238,8 +238,7 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
             || v.medicoNombre().toLowerCase(Locale.ROOT).contains(needle);
     }
 
-    @Override
-    public List<RecetaView> findRecetasByHistoria(long idHistoria) {
+    private List<RecetaView> recetaViewsOf(long idHistoria) {
         return recetas.values().stream().filter(r -> r.idHistoria() == idHistoria)
             .sorted(Comparator.comparing(Receta::id))
             .map(r -> view(r, null))

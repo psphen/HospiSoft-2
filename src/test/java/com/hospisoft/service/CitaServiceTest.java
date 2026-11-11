@@ -396,13 +396,13 @@ class CitaServiceTest {
         assertEquals(24, empty.slots().size());
         assertEquals(LocalTime.of(7, 0), empty.slots().get(0).hora());
         assertEquals(LocalTime.of(18, 30), empty.slots().get(23).hora());
-        assertTrue(empty.slots().stream().allMatch(Agenda.Slot::libre));
+        assertTrue(empty.slots().stream().allMatch(slot -> slot.citas().isEmpty()));
 
         Agenda garcia = service.agenda(10L, TODAY);
         assertEquals(24, garcia.slots().size(), "cancelled 16:00 frees its slot");
         assertEquals(1L, garcia.slots().get(4).citas().get(0).cita().id()); // 09:00 is the 5th slot
         assertEquals(2L, garcia.slots().get(0).citas().get(0).cita().id()); // 07:00 finalizada still shown
-        assertTrue(garcia.slots().get(18).libre());                          // 16:00 free (cancelled)
+        assertTrue(garcia.slots().get(18).citas().isEmpty());                       // 16:00 free (cancelled)
 
         // 09:15 (another medico's patient, different paciente) lands in the 09:00 slot together with cita 1
         citas.add(new Cita(50L, 10L, 21L, at(TODAY, 9, 15), "Intercalada", EstadoCita.PROGRAMADA, null, null, null));
@@ -412,7 +412,7 @@ class CitaServiceTest {
         assertEquals(25, crowded.slots().size());
         assertEquals(List.of(1L, 51L, 50L), crowded.slots().get(4).citas().stream().map(v -> v.cita().id()).toList(),
             "ordered by time then id: both 09:00 citas before the 09:15 one");
-        assertTrue(crowded.slots().get(5).libre(), "09:30 stays free");
+        assertTrue(crowded.slots().get(5).citas().isEmpty(),"09:30 stays free");
         assertEquals(LocalTime.of(20, 0), crowded.slots().get(24).hora());
         assertEquals(52L, crowded.slots().get(24).citas().get(0).cita().id());
 

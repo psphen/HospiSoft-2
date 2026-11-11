@@ -353,4 +353,17 @@ La cobertura de integración es **parcial**: verifica que el SQL se ejecute y re
 
 ## 12. Historial
 
-La carpeta [`modulo-pacientes/`](modulo-pacientes/) conserva la evidencia anterior del SENA (AA2-EV01 y AA2-EV02): un módulo Java + JDBC + servlets/JSP sobre MySQL con CRUD de pacientes. Se mantiene sin cambios como referencia histórica; la aplicación de escritorio descrita arriba lo reemplaza.
+Las evidencias anteriores del SENA ya no forman parte del árbol de trabajo; la aplicación de escritorio descrita arriba las reemplaza. Se conservan en el historial de git:
+
+| Evidencia | Contenido | Commits |
+|-----------|-----------|---------|
+| AA2-EV01 | CRUD de pacientes en Java + JDBC sobre MySQL y el archivo con el enlace del repositorio | `58935ce`, `31e8a5a` |
+| AA2-EV02 | Módulo web de pacientes con servlets/JSP (carpeta `modulo-pacientes/`) | `8a6b51c`, `e8ad57a` |
+
+Para consultarlas o recuperarlas:
+
+```bash
+git show 8a6b51c --stat                        # ver qué incluía un commit
+git checkout e8ad57a -- modulo-pacientes       # restaurar el módulo web en el árbol de trabajo
+git checkout 31e8a5a -- enlace-repositorio.txt # restaurar el enlace del repositorio
+```

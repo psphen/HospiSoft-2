@@ -11,10 +11,6 @@ public final class SessionHolder {
         return Optional.ofNullable(current);
     }
 
-    public boolean isLoggedIn() {
-        return current != null;
-    }
-
     public void set(SessionContext session) {
         this.current = session;
     }

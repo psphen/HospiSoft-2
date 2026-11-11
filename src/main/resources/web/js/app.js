@@ -55,13 +55,6 @@
     }, 4000);
   }
 
-  function hideDbBanner() {
-    var banner = document.getElementById(DB_BANNER_ID);
-    if (banner) {
-      banner.parentNode.removeChild(banner);
-    }
-  }
-
   function inspect(response) {
     if (!response.ok && response.code === 'DB_UNAVAILABLE') {
       showDbBanner();
@@ -221,8 +214,6 @@
     call: call,
     appCall: appCall,
     onReady: onReady,
-    showDbBanner: showDbBanner,
-    hideDbBanner: hideDbBanner,
     showToast: showToast
   };
 

@@ -71,8 +71,6 @@ public interface AtencionRepository {
 
     Optional<HistoriaView> findHistoriaById(long idHistoria);
 
-    List<RecetaView> findRecetasByHistoria(long idHistoria);
-
     /** Every receta prescribed to a patient, newest first; each carries its historia's date. */
     Page<RecetaView> findRecetasPage(long idPaciente, int page, int pageSize);
 }

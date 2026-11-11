@@ -182,11 +182,6 @@ public final class AtencionDao implements AtencionRepository {
     }
 
     @Override
-    public List<RecetaView> findRecetasByHistoria(long idHistoria) {
-        return pool.withConnection(connection -> recetasOf(connection, idHistoria));
-    }
-
-    @Override
     public Page<RecetaView> findRecetasPage(long idPaciente, int page, int pageSize) {
         long offset = Filters.offset(page, pageSize);
         return pool.withConnection(connection -> {

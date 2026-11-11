@@ -38,8 +38,6 @@ public interface DashboardRepository {
     /** Citas of the day grouped by state; the four states add up to the total. */
     record EstadoCounts(long total, long atendidas, long enCurso, long pendientes, long canceladas) {
 
-        public static final EstadoCounts ZERO = new EstadoCounts(0, 0, 0, 0, 0);
-
         /** Citas that still count as real work today: everything except the cancelled ones. */
         public long noCanceladas() {
             return total - canceladas;
