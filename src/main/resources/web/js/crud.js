@@ -1,6 +1,7 @@
 /*
- * Shared helpers for the CRUD pages (medicos.js, pacientes.js): table rendering utilities,
- * pagination, modal form state and validation feedback. Pure view glue; rules live in Java.
+ * Shared helpers for the list pages (medicos.js, pacientes.js, citas.js, medicamentos.js,
+ * auditoria.js): table rendering utilities, pagination, modal form state, validation feedback and
+ * the "Exportar" dropdown. Pure view glue; rules live in Java.
  */
 (function () {
   'use strict';
@@ -166,6 +167,76 @@
       : 'Eliminado';
   }
 
+  /* ---------------------------------------------------------------- list export */
+
+  /* The Java side waits on a save dialog: give the user plenty of time before the call times out. */
+  var EXPORT_TIMEOUT_MS = 30 * 60 * 1000;
+
+  /* First field message of a VALIDATION envelope, else the envelope message. */
+  function errorText(response) {
+    if (response.code === 'VALIDATION' && response.errors) {
+      var fields = Object.keys(response.errors);
+      if (fields.length > 0) {
+        return response.errors[fields[0]];
+      }
+    }
+    return response.message;
+  }
+
+  /*
+   * Wires the "Exportar" dropdown (#export-menu) of a list page and makes it visible.
+   *   options.method  bridge method, e.g. 'exportPacientes'
+   *   options.filter  function returning the CURRENT list filter, or null to abort (invalid input)
+   * Every format item carries data-export-format="xlsx|pdf". The toggle is disabled while Java
+   * renders, asks where to save and writes; a cancelled dialog shows nothing.
+   */
+  function bindExport(options) {
+    var root = document.getElementById(options.menuId || 'export-menu');
+    if (!root) {
+      return;
+    }
+    var toggle = root.querySelector('[data-bs-toggle="dropdown"]');
+    var busy = false;
+    root.classList.remove('d-none');
+
+    function done() {
+      busy = false;
+      setBusy(toggle, false);
+    }
+
+    Array.prototype.forEach.call(root.querySelectorAll('[data-export-format]'), function (item) {
+      item.addEventListener('click', function (event) {
+        event.preventDefault();
+        if (busy) {
+          return;
+        }
+        var filter = options.filter();
+        if (filter === null) {
+          return;
+        }
+        busy = true;
+        setBusy(toggle, true, '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Exportando…');
+        var payload = { filter: filter, format: item.getAttribute('data-export-format') };
+        window.HospiSoft.appCall(options.method, payload, { timeoutMs: EXPORT_TIMEOUT_MS })
+          .then(function (response) {
+            done();
+            if (!response.ok) {
+              window.HospiSoft.showToast('danger', errorText(response));
+              return;
+            }
+            if (response.data && response.data.saved) {
+              window.HospiSoft.showToast('success', 'Archivo guardado: ' + response.data.fileName
+                + ' (' + response.data.rows + ' registro(s))');
+            }
+          })
+          .catch(function (error) {
+            done();
+            window.HospiSoft.showToast('danger', error.message);
+          });
+      });
+    });
+  }
+
   window.HospiSoftCrud = {
     PAGE_SIZE: PAGE_SIZE,
     escapeHtml: escapeHtml,
@@ -183,6 +254,7 @@
     hideModalAlert: hideModalAlert,
     setBusy: setBusy,
     modal: modal,
-    deleteMessage: deleteMessage
+    deleteMessage: deleteMessage,
+    bindExport: bindExport
   };
 })();

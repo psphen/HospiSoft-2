@@ -20,7 +20,8 @@ class PageAccessTest {
 
     @Test
     void allowedPagesPerRole() {
-        assertEquals(List.of("index.html", "medicos.html", "pacientes.html", "citas.html", "medicamentos.html"),
+        assertEquals(List.of("index.html", "medicos.html", "pacientes.html", "citas.html", "medicamentos.html",
+                "auditoria.html"),
             PageAccess.allowedPages(Rol.ADMIN));
         assertEquals(List.of("index.html", "pacientes.html", "citas.html", "medicamentos.html"),
             PageAccess.allowedPages(Rol.MEDICO));
@@ -38,6 +39,15 @@ class PageAccessTest {
         assertFalse(PageAccess.isAllowed("pacientes.html", Rol.PACIENTE));
         assertTrue(PageAccess.isAllowed("medicos.html", Rol.ADMIN));
         assertFalse(PageAccess.isAllowed("nope.html", Rol.ADMIN));
+    }
+
+    @Test
+    void theAuditLogIsAdminOnly() {
+        assertTrue(PageAccess.isKnownPage("auditoria.html"));
+        assertTrue(PageAccess.isAllowed("auditoria.html", Rol.ADMIN));
+        assertFalse(PageAccess.isAllowed("auditoria.html", Rol.MEDICO));
+        assertFalse(PageAccess.isAllowed("auditoria.html", Rol.PACIENTE));
+        assertFalse(PageAccess.isAllowed("auditoria.html", null));
     }
 
     @Test

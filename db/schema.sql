@@ -5,12 +5,21 @@
 -- HOW TO RUN
 --   Open the Supabase Dashboard -> SQL Editor -> New query, paste this whole file
 --   and run it. The desktop application never creates tables: it only checks that
---   the 7 tables below exist in schema public and reports which ones are missing.
+--   the 8 tables below (7 domain tables plus the auditoria log) exist in schema
+--   public and reports which ones are missing.
+--
+-- UPGRADING AN EXISTING DATABASE
+--   Databases created before the audit log only lack table auditoria: re-run this
+--   whole file. Existing tables, rows and policies are left untouched; only the
+--   CHECK constraints on auditoria.accion / auditoria.modulo are recreated so they
+--   accept the codes added later (EXPORTAR, AUDITORIA).
 --
 -- IDEMPOTENCY
 --   Tables use CREATE TABLE IF NOT EXISTS, seeds use ON CONFLICT DO NOTHING on
 --   natural keys (username, documento, codigo). Appointments and clinical records
 --   are seeded only when the referenced rows are present and not already seeded.
+--   Functions use CREATE OR REPLACE and triggers/policies are dropped and recreated,
+--   as are the named CHECK constraints on auditoria.accion and auditoria.modulo.
 --
 -- TEST CREDENTIALS (plaintext, for the seed below)
 --   username    password        rol        linked to
@@ -121,6 +130,38 @@ CREATE TABLE IF NOT EXISTS receta (
     observacion_no_disponible VARCHAR(200)
 );
 
+-- Audit log: who did what, when. Append-only (see the triggers below). The user
+-- columns are a SNAPSHOT taken when the row is written, deliberately without a
+-- foreign key: entries must survive the deletion of the user they describe, and
+-- an ON DELETE action on a referencing column would collide with the trigger.
+-- id_usuario and rol are NULL for failed logins (username then holds the
+-- attempted name); username matches usuario.username in length.
+CREATE TABLE IF NOT EXISTS auditoria (
+    id          BIGSERIAL    PRIMARY KEY,
+    fecha       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    id_usuario  BIGINT       NULL,
+    username    VARCHAR(60)  NULL,
+    rol         VARCHAR(10)  NULL CHECK (rol IN ('ADMIN', 'MEDICO', 'PACIENTE')),
+    accion      VARCHAR(20)  NOT NULL,
+    modulo      VARCHAR(30)  NOT NULL,
+    id_registro BIGINT       NULL,
+    detalle     VARCHAR(500) NULL
+);
+
+-- The accepted accion / modulo codes grow with the application, so their CHECK
+-- constraints are named and recreated on every run: CREATE TABLE IF NOT EXISTS
+-- would leave an old list in place on an existing database. The names are the
+-- ones PostgreSQL gave the former inline column checks, so those are replaced too.
+-- Adding the constraint validates the existing rows, which only use older codes.
+ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS auditoria_accion_check;
+ALTER TABLE auditoria ADD CONSTRAINT auditoria_accion_check
+    CHECK (accion IN ('CREAR', 'EDITAR', 'ELIMINAR', 'DESACTIVAR', 'REPROGRAMAR', 'CANCELAR',
+                      'INICIAR_ATENCION', 'FINALIZAR_ATENCION', 'LOGIN', 'LOGIN_FALLIDO', 'LOGOUT',
+                      'EXPORTAR'));
+ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS auditoria_modulo_check;
+ALTER TABLE auditoria ADD CONSTRAINT auditoria_modulo_check
+    CHECK (modulo IN ('PACIENTE', 'MEDICO', 'MEDICAMENTO', 'CITA', 'ATENCION', 'SESION', 'AUDITORIA'));
+
 -- ----------------------------------------------------------------------------
 -- Indexes
 -- ----------------------------------------------------------------------------
@@ -128,6 +169,8 @@ CREATE TABLE IF NOT EXISTS receta (
 CREATE INDEX IF NOT EXISTS idx_cita_medico_fecha ON cita (id_medico, fecha_hora_programada);
 CREATE INDEX IF NOT EXISTS idx_cita_paciente     ON cita (id_paciente);
 CREATE INDEX IF NOT EXISTS idx_receta_historia   ON receta (id_historia);
+CREATE INDEX IF NOT EXISTS idx_auditoria_fecha   ON auditoria (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON auditoria (id_usuario);
 
 -- Defense in depth for the service rule "one attention in progress per medico":
 -- the partial unique index makes a second EN_CURSO cita impossible even under a race.
@@ -190,6 +233,33 @@ CREATE TRIGGER trg_receta_no_truncate
     FOR EACH STATEMENT EXECUTE FUNCTION receta_immutable();
 
 -- ----------------------------------------------------------------------------
+-- Immutability of auditoria
+-- The audit log is append-only: rows can be inserted but neither changed nor
+-- removed, so nobody can erase the trace of what they did.
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION auditoria_immutable()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'auditoria is immutable: % is not allowed', TG_OP
+        USING ERRCODE = 'restrict_violation';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_auditoria_immutable ON auditoria;
+CREATE TRIGGER trg_auditoria_immutable
+    BEFORE UPDATE OR DELETE ON auditoria
+    FOR EACH ROW EXECUTE FUNCTION auditoria_immutable();
+
+-- TRUNCATE does not fire row-level triggers: block it with a statement-level trigger.
+DROP TRIGGER IF EXISTS trg_auditoria_no_truncate ON auditoria;
+CREATE TRIGGER trg_auditoria_no_truncate
+    BEFORE TRUNCATE ON auditoria
+    FOR EACH STATEMENT EXECUTE FUNCTION auditoria_immutable();
+
+-- ----------------------------------------------------------------------------
 -- Row Level Security
 -- Enabled on every table. See the header: the app connects as the table owner
 -- (postgres) and therefore bypasses these policies. They document the intended
@@ -206,10 +276,11 @@ ALTER TABLE cita             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE medicamento      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE historia_clinica ENABLE ROW LEVEL SECURITY;
 ALTER TABLE receta           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auditoria        ENABLE ROW LEVEL SECURITY;
 
 -- The policies below are granted TO authenticated, the Supabase role used by PostgREST/GoTrue
 -- sessions; they require that role to exist (it does in every Supabase project).
--- medico, paciente, medicamento and receta have RLS enabled but no policy: for any
+-- medico, paciente, medicamento, receta and auditoria have RLS enabled but no policy: for any
 -- non-owner role they are default-deny by design until a least-privilege role is defined.
 --
 -- Example policies (documentation of the intended model, not enforced for postgres):

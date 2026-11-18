@@ -1,6 +1,7 @@
 package com.hospisoft.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,7 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.hospisoft.dao.InMemoryCitaRepository;
 import com.hospisoft.dao.InMemoryMedicoRepository;
 import com.hospisoft.dao.InMemoryPacienteRepository;
+import com.hospisoft.db.DatabaseUnavailableException;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.Cita;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.CitaView;
 import com.hospisoft.model.EstadoCita;
 import com.hospisoft.model.Medico;
@@ -44,6 +48,7 @@ class CitaServiceTest {
     private InMemoryPacienteRepository pacientes;
     private InMemoryCitaRepository citas;
     private SessionContext current;
+    private RecordingAuditLog audit;
     private CitaService service;
 
     private static OffsetDateTime at(LocalDate date, int hour, int minute) {
@@ -73,7 +78,76 @@ class CitaServiceTest {
         citas.add(new Cita(4L, 10L, 20L, at(TODAY.minusDays(1), 9, 0), "Vieja", EstadoCita.CANCELADA, null, null, null));
         citas.add(new Cita(5L, 10L, 21L, at(TODAY, 16, 0), "Cancelada", EstadoCita.CANCELADA, null, null, null));
         current = ADMIN;
-        service = new CitaService(citas, medicos, pacientes, () -> Optional.ofNullable(current), CLOCK, ZONE);
+        audit = new RecordingAuditLog();
+        audit.onRecord(() -> assertFalse(citas.transactionOpen(), "audit must be written after the commit"));
+        service = new CitaService(citas, medicos, pacientes, () -> Optional.ofNullable(current), CLOCK, ZONE, audit);
+    }
+
+    // ------------------------------------------------------------ audit
+
+    @Test
+    void createIsAuditedAfterTheCommit() {
+        CitaView created = service.create(input(10L, 21L, TOMORROW.toString(), "10:30", "Control"));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.CREAR, entry.accion());
+        assertEquals(ModuloAuditoria.CITA, entry.modulo());
+        assertEquals(created.cita().id(), entry.idRegistro());
+        assertEquals("Cita #" + created.cita().id() + " creada para 2026-10-28 10:30 - Juan Martinez con Carlos Garcia",
+            entry.detalle());
+    }
+
+    @Test
+    void rescheduleIsAuditedWithTheNewSlot() {
+        service.reschedule(1, input(11L, 20L, "2026-11-05", "10:00", "Control"));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.REPROGRAMAR, entry.accion());
+        assertEquals(1L, entry.idRegistro());
+        assertEquals("Cita #1 reprogramada a 2026-11-05 10:00 - Maria Torres con Laura Lopez", entry.detalle());
+    }
+
+    @Test
+    void cancelIsAudited() {
+        service.cancel(1);
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.CANCELAR, entry.accion());
+        assertEquals(1L, entry.idRegistro());
+        assertEquals("Cita #1 cancelada (2026-10-27 09:00) - Maria Torres con Carlos Garcia", entry.detalle());
+    }
+
+    @Test
+    void createIsAuditedEvenWhenTheReloadFails() {
+        int before = citas.snapshot().size();
+        citas.failReadsWhen(() -> citas.snapshot().size() > before);
+        assertThrows(DatabaseUnavailableException.class,
+            () -> service.create(input(10L, 21L, TOMORROW.toString(), "10:30", "Control")));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.CREAR, entry.accion());
+        long newId = citas.snapshot().get(before).id();
+        assertEquals(newId, entry.idRegistro());
+        assertEquals("Cita #" + newId + " creada para 2026-10-28 10:30 - Juan Martinez con Carlos Garcia",
+            entry.detalle());
+    }
+
+    @Test
+    void rescheduleIsAuditedEvenWhenTheReloadFails() {
+        OffsetDateTime original = citas.raw(1).fechaHoraProgramada();
+        citas.failReadsWhen(() -> !citas.raw(1).fechaHoraProgramada().equals(original));
+        assertThrows(DatabaseUnavailableException.class,
+            () -> service.reschedule(1, input(11L, 20L, "2026-11-05", "10:00", "Control")));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.REPROGRAMAR, entry.accion());
+        assertEquals(1L, entry.idRegistro());
+        assertEquals("Cita #1 reprogramada a 2026-11-05 10:00 - Maria Torres con Laura Lopez", entry.detalle());
+    }
+
+    @Test
+    void rejectedCitaWritesAreNotAudited() {
+        assertThrows(ValidationException.class, () -> service.create(input(10L, 21L, TODAY.toString(), "09:00", "x")));
+        assertThrows(ValidationException.class, () -> service.cancel(2)); // FINALIZADA
+        assertThrows(NotFoundException.class, () -> service.cancel(999));
+        current = GARCIA;
+        assertThrows(PermissionException.class, () -> service.cancel(1));
+        assertTrue(audit.entries().isEmpty(), "only successful writes are audited: " + audit.entries());
     }
 
     private ValidationException invalid(CitaInput in) {
@@ -322,13 +396,13 @@ class CitaServiceTest {
         assertEquals(24, empty.slots().size());
         assertEquals(LocalTime.of(7, 0), empty.slots().get(0).hora());
         assertEquals(LocalTime.of(18, 30), empty.slots().get(23).hora());
-        assertTrue(empty.slots().stream().allMatch(Agenda.Slot::libre));
+        assertTrue(empty.slots().stream().allMatch(slot -> slot.citas().isEmpty()));
 
         Agenda garcia = service.agenda(10L, TODAY);
         assertEquals(24, garcia.slots().size(), "cancelled 16:00 frees its slot");
         assertEquals(1L, garcia.slots().get(4).citas().get(0).cita().id()); // 09:00 is the 5th slot
         assertEquals(2L, garcia.slots().get(0).citas().get(0).cita().id()); // 07:00 finalizada still shown
-        assertTrue(garcia.slots().get(18).libre());                          // 16:00 free (cancelled)
+        assertTrue(garcia.slots().get(18).citas().isEmpty());                       // 16:00 free (cancelled)
 
         // 09:15 (another medico's patient, different paciente) lands in the 09:00 slot together with cita 1
         citas.add(new Cita(50L, 10L, 21L, at(TODAY, 9, 15), "Intercalada", EstadoCita.PROGRAMADA, null, null, null));
@@ -338,7 +412,7 @@ class CitaServiceTest {
         assertEquals(25, crowded.slots().size());
         assertEquals(List.of(1L, 51L, 50L), crowded.slots().get(4).citas().stream().map(v -> v.cita().id()).toList(),
             "ordered by time then id: both 09:00 citas before the 09:15 one");
-        assertTrue(crowded.slots().get(5).libre(), "09:30 stays free");
+        assertTrue(crowded.slots().get(5).citas().isEmpty(),"09:30 stays free");
         assertEquals(LocalTime.of(20, 0), crowded.slots().get(24).hora());
         assertEquals(52L, crowded.slots().get(24).citas().get(0).cita().id());
 
@@ -356,5 +430,26 @@ class CitaServiceTest {
         current = ADMIN;
         ValidationException ex = assertThrows(ValidationException.class, () -> service.agenda(null, TODAY));
         assertEquals(Validation.REQUIRED, ex.errors().get("idMedico"));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportAppliesTheRoleScopeOfTheList() {
+        CitaFilter todas = new CitaFilter(null, null, null, null, CitaRango.TODAS);
+        assertEquals(service.list(todas, 1, 100).items(), service.listForExport(todas).items());
+        assertEquals(5, service.listForExport(todas).items().size());
+
+        current = GARCIA;
+        CitaFilter otroMedico = new CitaFilter(null, null, null, 11L, CitaRango.TODAS);
+        assertEquals(List.of(1L, 2L, 4L, 5L), service.listForExport(otroMedico).items().stream()
+            .map(v -> v.cita().id()).sorted().toList(), "a medico exports only its own citas, whatever idMedico says");
+
+        current = MARIA;
+        assertEquals(List.of(1L, 4L), service.listForExport(todas).items().stream()
+            .map(v -> v.cita().id()).sorted().toList(), "a paciente exports only its own citas");
+
+        current = null;
+        assertThrows(PermissionException.class, () -> service.listForExport(todas));
     }
 }

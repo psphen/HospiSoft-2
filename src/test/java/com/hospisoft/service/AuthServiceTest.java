@@ -1,13 +1,19 @@
 package com.hospisoft.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.hospisoft.dao.UsuarioRepository;
+import com.hospisoft.model.AccionAuditoria;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Rol;
 import com.hospisoft.model.Usuario;
 import com.hospisoft.security.PasswordHasher;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -51,6 +57,7 @@ class AuthServiceTest {
     private FakeUsuarioRepository repository;
     private final AtomicLong now = new AtomicLong(1_000_000);
     private LoginThrottle throttle;
+    private RecordingAuditLog audit;
     private AuthService service;
 
     private static Usuario user(long id, String username, String password, Rol rol, boolean activo,
@@ -73,7 +80,108 @@ class AuthServiceTest {
         repository.add(medico);
         repository.add(inactivo);
         throttle = new LoginThrottle(now::get);
-        service = new AuthService(repository, throttle);
+        audit = new RecordingAuditLog();
+        service = new AuthService(repository, throttle, audit);
+    }
+
+    // ------------------------------------------------------------ audit
+
+    @Test
+    void successfulLoginIsAuditedForTheNewSession() {
+        SessionContext session = service.login(" dr.garcia ", "Medico123*".toCharArray());
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.LOGIN, entry.accion());
+        assertEquals(ModuloAuditoria.SESION, entry.modulo());
+        assertEquals(session, entry.actor(), "there is no session yet: the actor is explicit");
+        assertEquals(AuthService.LOGIN_DETALLE, entry.detalle());
+    }
+
+    @Test
+    void badCredentialsAreAuditedWithTheAttemptedUsernameOnly() {
+        assertThrows(AuthenticationException.class, () -> service.login(" admin ", "Wrong-Secret-42".toCharArray()));
+        assertThrows(AuthenticationException.class, () -> service.login("inactivo", "Secret123*".toCharArray()));
+        List<RecordingAuditLog.Entry> entries = audit.entries();
+        assertEquals(2, entries.size());
+        assertEquals(List.of("admin", "inactivo"), entries.stream().map(RecordingAuditLog.Entry::username).toList());
+        for (RecordingAuditLog.Entry entry : entries) {
+            assertEquals(AccionAuditoria.LOGIN_FALLIDO, entry.accion());
+            assertNull(entry.actor());
+            assertEquals(AuthService.GENERIC_FAILURE, entry.detalle());
+            assertFalse(entry.toString().contains("Secret"), "the password must never be audited: " + entry);
+        }
+    }
+
+    /** A user who types the password into the username box must not get it stored forever. */
+    @Test
+    void anUnknownUsernameIsNeverStored() {
+        assertThrows(AuthenticationException.class, () -> service.login("Medico123*", "whatever".toCharArray()));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.LOGIN_FALLIDO, entry.accion());
+        assertNull(entry.username());
+        assertNull(entry.actor());
+        assertEquals(AuthService.UNKNOWN_USER_DETALLE, entry.detalle());
+        assertFalse(entry.toString().contains("Medico123*"), "the typed text appears nowhere: " + entry);
+        assertFalse(entry.toString().contains("whatever"));
+    }
+
+    @Test
+    void anEmptyPasswordIsAuditedOnlyWithAKnownUsername() {
+        assertThrows(AuthenticationException.class, () -> service.login("Typo-Secret", new char[0]));
+        assertNull(audit.only().username());
+        assertFalse(audit.only().toString().contains("Typo-Secret"));
+        audit.clear();
+        assertThrows(AuthenticationException.class, () -> service.login(" admin ", new char[0]));
+        assertEquals("admin", audit.only().username());
+        assertEquals(AuthService.GENERIC_FAILURE, audit.only().detalle());
+    }
+
+    @Test
+    void aLockedUnknownUsernameIsNotStoredEither() {
+        for (int i = 0; i < LoginThrottle.MAX_FAILURES; i++) {
+            assertThrows(AuthenticationException.class, () -> service.login("Pass-Typed-Here", "x".toCharArray()));
+        }
+        audit.clear();
+        AuthenticationException locked = assertThrows(AuthenticationException.class,
+            () -> service.login("Pass-Typed-Here", "x".toCharArray()));
+        assertEquals(LoginThrottle.LOCKED_MESSAGE, locked.getMessage());
+        RecordingAuditLog.Entry entry = audit.only();
+        assertNull(entry.username());
+        assertEquals(LoginThrottle.LOCKED_MESSAGE, entry.detalle());
+        assertFalse(entry.toString().contains("Pass-Typed-Here"));
+    }
+
+    @Test
+    void aFailingLookupDuringLockoutStillLocksAndStoresNoUsername() {
+        AuthService flaky = new AuthService(username -> {
+            throw new com.hospisoft.db.DatabaseUnavailableException("down", null);
+        }, throttle, audit);
+        for (int i = 0; i < LoginThrottle.MAX_FAILURES; i++) {
+            throttle.recordFailure("admin");
+        }
+        AuthenticationException locked = assertThrows(AuthenticationException.class,
+            () -> flaky.login("admin", "Admin123*".toCharArray()));
+        assertEquals(LoginThrottle.LOCKED_MESSAGE, locked.getMessage());
+        assertNull(audit.only().username());
+    }
+
+    @Test
+    void aThrottledAttemptIsAuditedAsLockout() {
+        for (int i = 0; i < LoginThrottle.MAX_FAILURES; i++) {
+            assertThrows(AuthenticationException.class, () -> service.login("admin", "wrong".toCharArray()));
+        }
+        audit.clear();
+        assertThrows(AuthenticationException.class, () -> service.login("admin", "Admin123*".toCharArray()));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.LOGIN_FALLIDO, entry.accion());
+        assertEquals("admin", entry.username());
+        assertEquals(LoginThrottle.LOCKED_MESSAGE, entry.detalle());
+    }
+
+    @Test
+    void blankCredentialsAreNotAuditedWhenThereIsNoUsername() {
+        assertThrows(AuthenticationException.class, () -> service.login("  ", "x".toCharArray()));
+        assertThrows(AuthenticationException.class, () -> service.login(null, "x".toCharArray()));
+        assertTrue(audit.entries().isEmpty());
     }
 
     @Test

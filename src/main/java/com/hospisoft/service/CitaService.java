@@ -4,10 +4,12 @@ import com.hospisoft.dao.CitaQuery;
 import com.hospisoft.dao.CitaRepository;
 import com.hospisoft.dao.MedicoRepository;
 import com.hospisoft.dao.PacienteRepository;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.Cita;
 import com.hospisoft.model.CitaView;
 import com.hospisoft.model.EstadoCita;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.Rol;
@@ -15,6 +17,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +37,7 @@ import java.util.function.Supplier;
  * Only PROGRAMADA citas can be rescheduled or cancelled. The row locks (medico first, then
  * paciente, {@code FOR NO KEY UPDATE}), the active re-checks, the overlap checks and the write
  * share one transaction. When a {@code fecha} filter is given the {@code rango} preset is ignored.
+ * Creating, rescheduling and cancelling are recorded in the audit log after the commit.
  *
  * <p>Roles: ADMIN full; MEDICO read-only on own citas and own agenda; PACIENTE read-only on own
  * citas. Out-of-scope reads answer NOT_FOUND.
@@ -62,6 +66,7 @@ public final class CitaService {
     static final String PACIENTE_INACTIVE = "El paciente está inactivo";
 
     private static final String ISO_DATE = "\\d{4}-\\d{2}-\\d{2}";
+    private static final DateTimeFormatter AUDIT_SLOT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final CitaRepository citas;
     private final MedicoRepository medicos;
@@ -69,15 +74,17 @@ public final class CitaService {
     private final Access access;
     private final Clock clock;
     private final AppZone zone;
+    private final AuditLog audit;
 
     public CitaService(CitaRepository citas, MedicoRepository medicos, PacienteRepository pacientes,
-                       Supplier<Optional<SessionContext>> session, Clock clock, AppZone zone) {
+                       Supplier<Optional<SessionContext>> session, Clock clock, AppZone zone, AuditLog audit) {
         this.citas = citas;
         this.medicos = medicos;
         this.pacientes = pacientes;
         this.access = new Access(session);
         this.clock = clock;
         this.zone = zone;
+        this.audit = audit;
     }
 
     public AppZone zone() {
@@ -108,6 +115,11 @@ public final class CitaService {
             f.fecha() == null ? null : zone.dayEnd(f.fecha()),
             f.estado(), idMedico, idPaciente, range[0], range[1]);
         return citas.findPage(query, page, pageSize);
+    }
+
+    /** Every row {@link #list} would page through (same permission and role scope), up to the export cap. */
+    public ExportRows<CitaView> listForExport(CitaFilter filter) {
+        return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
     }
 
     public CitaView get(long id) {
@@ -188,6 +200,9 @@ public final class CitaService {
             return tx.insert(new Cita(null, s.idMedico, s.idPaciente, s.start, s.motivo, EstadoCita.PROGRAMADA,
                 null, null, null));
         });
+        // committed: audit BEFORE the reload, from data already in hand, so a failed read cannot hide the write
+        audit.record(AccionAuditoria.CREAR, ModuloAuditoria.CITA, id,
+            "Cita #" + id + " creada para " + slotText(s.start) + s.partiesText());
         return citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
     }
 
@@ -202,6 +217,9 @@ public final class CitaService {
             tx.reschedule(id, s.idMedico, s.idPaciente, s.start, s.motivo);
             return null;
         });
+        // committed: audit BEFORE the reload, from data already in hand, so a failed read cannot hide the write
+        audit.record(AccionAuditoria.REPROGRAMAR, ModuloAuditoria.CITA, id,
+            "Cita #" + id + " reprogramada a " + slotText(s.start) + s.partiesText());
         return citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
     }
 
@@ -210,12 +228,27 @@ public final class CitaService {
         CitaView existing = citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
         requireProgramada(existing);
         citas.cancel(id);
+        audit.record(AccionAuditoria.CANCELAR, ModuloAuditoria.CITA, id, "Cita #" + id + " cancelada ("
+            + slotText(existing.cita().fechaHoraProgramada()) + ") - " + existing.pacienteNombre() + " con "
+            + existing.medicoNombre());
         return citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
     }
 
     // ------------------------------------------------------------ internals
 
-    private record Scheduled(long idMedico, long idPaciente, OffsetDateTime start, OffsetDateTime end, String motivo) {
+    /** Local wall time of a slot for the audit text, e.g. "2026-11-05 10:00". */
+    private String slotText(OffsetDateTime start) {
+        return start.atZoneSameInstant(zone.zone()).format(AUDIT_SLOT);
+    }
+
+    /** Validated input; the display names come from the rows loaded during validation (for the audit text). */
+    private record Scheduled(long idMedico, long idPaciente, OffsetDateTime start, OffsetDateTime end, String motivo,
+                             String medicoNombre, String pacienteNombre) {
+
+        /** " - Paciente con Medico". */
+        String partiesText() {
+            return " - " + pacienteNombre + " con " + medicoNombre;
+        }
     }
 
     private static void requireProgramada(CitaView view) {
@@ -256,6 +289,8 @@ public final class CitaService {
         Validation v = new Validation();
         Long idMedico = in.idMedico();
         Long idPaciente = in.idPaciente();
+        String medicoNombre = null;
+        String pacienteNombre = null;
         if (idMedico == null) {
             v.reject("idMedico", Validation.REQUIRED);
         } else {
@@ -264,6 +299,8 @@ public final class CitaService {
                 v.reject("idMedico", MEDICO_NOT_FOUND);
             } else if (!medico.get().activo()) {
                 v.reject("idMedico", MEDICO_INACTIVE);
+            } else {
+                medicoNombre = medico.get().nombres() + " " + medico.get().apellidos();
             }
         }
         if (idPaciente == null) {
@@ -274,6 +311,8 @@ public final class CitaService {
                 v.reject("idPaciente", PACIENTE_NOT_FOUND);
             } else if (!paciente.get().activo()) {
                 v.reject("idPaciente", PACIENTE_INACTIVE);
+            } else {
+                pacienteNombre = paciente.get().nombres() + " " + paciente.get().apellidos();
             }
         }
         LocalDate date = null;
@@ -321,7 +360,8 @@ public final class CitaService {
             }
         }
         v.throwIfInvalid();
-        return new Scheduled(idMedico, idPaciente, start, start.plusMinutes(SLOT_MINUTES), motivo);
+        return new Scheduled(idMedico, idPaciente, start, start.plusMinutes(SLOT_MINUTES), motivo, medicoNombre,
+            pacienteNombre);
     }
 
     private OffsetDateTime[] rangeBounds(CitaRango rango) {

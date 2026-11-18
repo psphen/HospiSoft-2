@@ -360,6 +360,8 @@
   prepareDateInput();
   window.HospiSoft.onReady(function () {
     applyRole();
+    /* ADMIN and MEDICO both list (MEDICO: attended patients only); export follows the same scope */
+    crud.bindExport({ method: 'exportPacientes', filter: currentFilter });
     load(1);
   });
 })();

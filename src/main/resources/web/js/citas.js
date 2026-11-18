@@ -497,6 +497,8 @@
     if (rol === 'ADMIN') {
       loadSelects();
     }
+    /* every role lists citas (scoped in Java to its own for MEDICO / PACIENTE) */
+    crud.bindExport({ method: 'exportCitas', filter: currentFilter });
     load(1);
     if (rol === 'MEDICO') {
       loadAgenda();

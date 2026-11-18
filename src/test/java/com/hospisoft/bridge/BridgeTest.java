@@ -8,10 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.hospisoft.dao.UsuarioRepository;
 import com.hospisoft.db.DatabaseAuthException;
 import com.hospisoft.db.DatabaseUnavailableException;
+import com.hospisoft.model.AccionAuditoria;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Rol;
 import com.hospisoft.model.Usuario;
 import com.hospisoft.security.PasswordHasher;
 import com.hospisoft.service.AuthService;
+import com.hospisoft.service.RecordingAuditLog;
 import com.hospisoft.service.SessionContext;
 import com.hospisoft.service.SessionHolder;
 import com.hospisoft.service.StartupProbe;
@@ -205,6 +208,61 @@ class BridgeTest {
     }
 
     @Test
+    void logoutIsAuditedForTheEndingSessionOffTheCallerThread() throws InterruptedException {
+        RecordingAuditLog audit = new RecordingAuditLog();
+        CountDownLatch recorded = new CountDownLatch(1);
+        String[] thread = new String[1];
+        audit.onRecord(() -> {
+            thread[0] = Thread.currentThread().getName();
+            recorded.countDown();
+        });
+        Bridge bridge = auditedBridge(audit);
+        SessionContext garcia = new SessionContext(2, "dr.garcia", Rol.MEDICO, 10L, "Carlos Garcia");
+        sessions.set(garcia);
+
+        assertEquals(true, Json.parseObject(bridge.logout()).get("ok"));
+        assertTrue(sessions.current().isEmpty(), "the session is cleared at once");
+        assertTrue(recorded.await(10, TimeUnit.SECONDS), "logout was not audited");
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.LOGOUT, entry.accion());
+        assertEquals(ModuloAuditoria.SESION, entry.modulo());
+        assertEquals(garcia, entry.actor());
+        assertEquals("hospisoft-bridge", thread[0], "the database write must not block the UI thread");
+    }
+
+    @Test
+    void logoutWithoutASessionIsNotAudited() throws InterruptedException {
+        RecordingAuditLog audit = new RecordingAuditLog();
+        Bridge bridge = auditedBridge(audit);
+        assertEquals(true, Json.parseObject(bridge.logout()).get("ok"));
+        Thread.sleep(50);
+        assertTrue(audit.entries().isEmpty());
+    }
+
+    @Test
+    void aFailingAuditNeverBreaksLogout() {
+        RecordingAuditLog audit = new RecordingAuditLog();
+        audit.onRecord(() -> {
+            throw new IllegalStateException("audit down");
+        });
+        Bridge bridge = auditedBridge(audit);
+        sessions.set(new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador"));
+        assertEquals(true, Json.parseObject(bridge.logout()).get("ok"));
+        assertTrue(sessions.current().isEmpty());
+        bridge.shutdown();
+        sessions.set(new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador"));
+        assertEquals(true, Json.parseObject(bridge.logout()).get("ok"), "a stopped executor is tolerated too");
+        assertTrue(sessions.current().isEmpty());
+    }
+
+    private Bridge auditedBridge(RecordingAuditLog audit) {
+        Bridge bridge = new Bridge(new AuthService(WORKING_REPOSITORY), sessions, StartupStatus::ok, page -> { }, sink,
+            audit);
+        created.add(bridge);
+        return bridge;
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void startupStatusReportsEachState() {
         Map<String, Object> ok = (Map<String, Object>) Json.parseObject(
@@ -306,7 +364,8 @@ class BridgeTest {
             Json.parseObject(bridge.getAllowedPages()).get("data"));
         sessions.set(new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador"));
         List<Object> all = (List<Object>) Json.parseObject(bridge.getAllowedPages()).get("data");
-        assertEquals(5, all.size());
+        assertEquals(6, all.size());
+        assertTrue(all.contains("auditoria.html"), "the audit log is an ADMIN page");
     }
 
     // ------------------------------------------------------------ async path
@@ -338,7 +397,7 @@ class BridgeTest {
         Map<String, Object> envelope = envelopeOf(sink.await(), "r2");
         assertEquals(true, envelope.get("ok"));
         assertEquals("admin", ((Map<String, Object>) envelope.get("data")).get("username"));
-        assertTrue(sessions.isLoggedIn());
+        assertTrue(sessions.current().isPresent());
     }
 
     @Test

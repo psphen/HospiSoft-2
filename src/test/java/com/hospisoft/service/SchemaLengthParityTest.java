@@ -68,6 +68,9 @@ class SchemaLengthParityTest {
         constants.put("receta.dosis", AtencionService.MAX_DOSIS);
         constants.put("receta.duracion", AtencionService.MAX_DURACION);
         constants.put("receta.observacion_no_disponible", AtencionService.MAX_OBSERVACION_NO_DISPONIBLE);
+        constants.put("auditoria.detalle", AuditoriaService.MAX_DETALLE);
+        constants.put("auditoria.username", AuditoriaService.MAX_USERNAME);
+        constants.put("usuario.username", AuditoriaService.MAX_USERNAME);
         for (Map.Entry<String, Integer> entry : constants.entrySet()) {
             Integer columnLength = schema.get(entry.getKey());
             assertTrue(columnLength != null, "column not found in schema: " + entry.getKey());

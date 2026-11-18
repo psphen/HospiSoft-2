@@ -9,7 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.hospisoft.dao.InMemoryMedicamentoRepository;
 import com.hospisoft.dao.MedicamentoFilter;
 import com.hospisoft.dao.MedicamentoRepository;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.Medicamento;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.Rol;
 import com.hospisoft.model.StockState;
@@ -27,6 +29,7 @@ class MedicamentoServiceTest {
 
     private InMemoryMedicamentoRepository repository;
     private SessionContext current;
+    private RecordingAuditLog audit;
     private MedicamentoService service;
 
     /** Insert input (no stockExpected). */
@@ -49,7 +52,8 @@ class MedicamentoServiceTest {
         repository.add(new Medicamento(3L, "MED-005", "Loratadina", null, "Caja x 10", 0, 15, true));
         repository.add(new Medicamento(4L, "MED-010", "Diclofenaco", null, "Tubo", 35, 10, false));
         current = ADMIN;
-        service = new MedicamentoService(repository, () -> Optional.ofNullable(current));
+        audit = new RecordingAuditLog();
+        service = new MedicamentoService(repository, () -> Optional.ofNullable(current), audit);
     }
 
     @Test
@@ -198,10 +202,49 @@ class MedicamentoServiceTest {
                 throw new ValidationException(Map.of("codigo", Validation.DUPLICATE_CODIGO));
             }
         };
-        MedicamentoService racingService = new MedicamentoService(racing, () -> Optional.of(ADMIN));
+        MedicamentoService racingService = new MedicamentoService(racing, () -> Optional.of(ADMIN), audit);
         ValidationException ex = assertThrows(ValidationException.class,
             () -> racingService.save(input("MED-040", "N", "P", 1L, 1L), null));
         assertEquals(Validation.DUPLICATE_CODIGO, ex.errors().get("codigo"));
+        assertTrue(audit.entries().isEmpty(), "a failed insert is not audited");
+    }
+
+    // ------------------------------------------------------------ audit
+
+    @Test
+    void saveIsAuditedAsCrearOrEditarWithTheStock() {
+        Medicamento created = service.save(input(" MED-020 ", "Aspirina", "Caja", 40L, 5L), null);
+        RecordingAuditLog.Entry insert = audit.only();
+        assertEquals(AccionAuditoria.CREAR, insert.accion());
+        assertEquals(ModuloAuditoria.MEDICAMENTO, insert.modulo());
+        assertEquals(created.id(), insert.idRegistro());
+        assertEquals("Medicamento MED-020 - Aspirina (stock 40)", insert.detalle());
+        audit.clear();
+
+        service.save(update(2, "MED-002", "Ibuprofeno 400", "Caja x 10", 30L, 30L, 25L), null);
+        RecordingAuditLog.Entry edit = audit.only();
+        assertEquals(AccionAuditoria.EDITAR, edit.accion());
+        assertEquals(2L, edit.idRegistro());
+        assertEquals("Medicamento MED-002 - Ibuprofeno 400 (stock 30)", edit.detalle());
+    }
+
+    @Test
+    void aStockConflictIsNotAudited() {
+        assertThrows(ConflictException.class,
+            () -> service.save(update(2, "MED-002", "Ibuprofeno", "Caja x 10", 30L, 30L, 99L), null));
+        assertTrue(audit.entries().isEmpty());
+    }
+
+    @Test
+    void deleteIsAuditedPerOutcome() {
+        service.delete(4);
+        assertEquals(AccionAuditoria.ELIMINAR, audit.only().accion());
+        assertEquals("Medicamento MED-010 - Diclofenaco", audit.only().detalle());
+        audit.clear();
+        repository.markHistory(1);
+        service.delete(1);
+        assertEquals(AccionAuditoria.DESACTIVAR, audit.only().accion());
+        assertEquals("Medicamento MED-001 - Acetaminofen (referenciado en recetas)", audit.only().detalle());
     }
 
     @Test
@@ -222,5 +265,20 @@ class MedicamentoServiceTest {
         assertEquals(2, repository.countLowStock()); // MED-002 (25<=30) and MED-005 (0); MED-010 is inactive
         assertEquals(List.of("Acetaminofen", "Ibuprofeno", "Loratadina"),
             repository.findAllActive().stream().map(Medicamento::nombre).toList());
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheSameFilterAsTheListForEveryRole() {
+        MedicamentoFilter bajos = new MedicamentoFilter(null, null, StockState.STOCK_BAJO);
+        for (SessionContext role : List.of(ADMIN, MEDICO, PACIENTE)) {
+            current = role;
+            ExportRows<Medicamento> rows = service.listForExport(bajos);
+            assertEquals(service.list(bajos, 1, 100).items(), rows.items(), role.username());
+            assertEquals(List.of("MED-002"), rows.items().stream().map(Medicamento::codigo).toList());
+        }
+        current = null;
+        assertThrows(PermissionException.class, () -> service.listForExport(MedicamentoFilter.NONE));
     }
 }

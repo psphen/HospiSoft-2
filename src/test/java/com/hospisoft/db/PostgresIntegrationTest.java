@@ -139,7 +139,7 @@ class PostgresIntegrationTest {
             assertEquals(historia, stored.historia().id());
             assertEquals(1, stored.recetas().size());
             assertEquals(4, stored.recetas().get(0).receta().cantidad());
-            assertEquals(1, dao.findRecetasByHistoria(historia).size());
+            assertEquals(1, dao.findHistoriaById(historia).orElseThrow().recetas().size());
             Page<HistoriaView> page = dao.findHistoriasPage(new HistoriaQuery(paciente, medico, "dx"), 1, 10);
             assertEquals(1, page.total());
             assertEquals(1, dao.findRecetasPage(paciente, 1, 10).total());
@@ -201,10 +201,44 @@ class PostgresIntegrationTest {
     }
 
     @Test
-    void theSevenTablesExist() {
+    void theRequiredTablesExist() {
         try (ConnectionPool pool = readOnlyPool()) {
             assertEquals(List.of(), new SchemaChecker(pool).findMissing());
         }
+    }
+
+    /** The audit log is append-only: rows can be inserted (inside this rolled-back transaction) but never changed. */
+    @Test
+    void auditoriaIsAppendOnly() throws SQLException {
+        long id;
+        try (PreparedStatement ps = connection.prepareStatement(
+            "INSERT INTO auditoria (username, accion, modulo, detalle) VALUES (?, 'LOGIN_FALLIDO', 'SESION', ?) RETURNING id")) {
+            ps.setString(1, "integration");
+            ps.setString(2, MARKER + " audit");
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                id = rs.getLong(1);
+            }
+        }
+        for (String sql : List.of("UPDATE auditoria SET detalle = 'changed' WHERE id = ?", "DELETE FROM auditoria WHERE id = ?")) {
+            Savepoint savepoint = connection.setSavepoint();
+            SQLException rejected = assertThrows(SQLException.class, () -> {
+                try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                    ps.setLong(1, id);
+                    ps.executeUpdate();
+                }
+            });
+            assertTrue(rejected.getMessage().toLowerCase().contains("immutable"), rejected.getMessage());
+            connection.rollback(savepoint);
+        }
+        Savepoint beforeCheck = connection.setSavepoint();
+        SQLException badAccion = assertThrows(SQLException.class, () -> {
+            try (Statement st = connection.createStatement()) {
+                st.executeUpdate("INSERT INTO auditoria (accion, modulo) VALUES ('BORRAR_TODO', 'SESION')");
+            }
+        });
+        assertEquals("23514", badAccion.getSQLState(), "the CHECK constraint must reject unknown actions");
+        connection.rollback(beforeCheck);
     }
 
     /**

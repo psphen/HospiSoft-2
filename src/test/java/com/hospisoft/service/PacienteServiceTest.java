@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.hospisoft.dao.InMemoryPacienteRepository;
 import com.hospisoft.dao.PacienteFilter;
+import com.hospisoft.model.AccionAuditoria;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Paciente;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.Rol;
@@ -29,6 +31,7 @@ class PacienteServiceTest {
 
     private InMemoryPacienteRepository repository;
     private SessionContext current;
+    private RecordingAuditLog audit;
     private PacienteService service;
 
     private static Paciente paciente(Long id, String documento, String nombres, String apellidos, LocalDate birth,
@@ -49,7 +52,8 @@ class PacienteServiceTest {
         repository.markAttended(21L, 11L);      // Juan was attended by another medico
         repository.markCita(24L, 10L, true);    // Luis: only a cancelled cita with dr.garcia
         current = ADMIN;
-        service = new PacienteService(repository, () -> Optional.ofNullable(current), CLOCK);
+        audit = new RecordingAuditLog();
+        service = new PacienteService(repository, () -> Optional.ofNullable(current), CLOCK, audit);
     }
 
     // ------------------------------------------------------------ permissions
@@ -244,6 +248,60 @@ class PacienteServiceTest {
         assertFalse(repository.findById(22).orElseThrow().activo());
     }
 
+    // ------------------------------------------------------------ audit
+
+    @Test
+    void insertIsAuditedAsCrearWithTheNewId() {
+        Paciente saved = service.save(paciente(null, " 3001 ", "Luis", "Perez", LocalDate.of(2000, 1, 1), "M", true));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.CREAR, entry.accion());
+        assertEquals(ModuloAuditoria.PACIENTE, entry.modulo());
+        assertEquals(saved.id(), entry.idRegistro());
+        assertEquals("Paciente 3001 - Luis Perez", entry.detalle());
+        assertNull(entry.actor(), "recorded for the current session");
+    }
+
+    @Test
+    void updateIsAuditedAsEditar() {
+        service.save(paciente(21L, "2002", "Juan Pablo", "Martinez", LocalDate.of(1985, 11, 2), "M", true));
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.EDITAR, entry.accion());
+        assertEquals(21L, entry.idRegistro());
+        assertEquals("Paciente 2002 - Juan Pablo Martinez", entry.detalle());
+    }
+
+    @Test
+    void deleteIsAuditedPerOutcome() {
+        service.delete(22);
+        assertEquals(AccionAuditoria.ELIMINAR, audit.only().accion());
+        assertEquals("Paciente 2003 - Ana Ramirez", audit.only().detalle());
+        audit.clear();
+
+        service.delete(20);
+        RecordingAuditLog.Entry entry = audit.only();
+        assertEquals(AccionAuditoria.DESACTIVAR, entry.accion());
+        assertEquals(20L, entry.idRegistro());
+        assertEquals("Paciente 2001 - Maria Torres (tiene historial asociado)", entry.detalle());
+    }
+
+    @Test
+    void deleteRaceIsAuditedAsDesactivar() {
+        repository.failDeleteWithHistory(22);
+        service.delete(22);
+        assertEquals(AccionAuditoria.DESACTIVAR, audit.only().accion());
+    }
+
+    @Test
+    void failedOrForbiddenOperationsAreNotAudited() {
+        assertThrows(ValidationException.class,
+            () -> service.save(paciente(null, "2001", "Dup", "Licate", LocalDate.of(2000, 1, 1), "M", true)));
+        assertThrows(NotFoundException.class, () -> service.delete(999));
+        current = MEDICO;
+        assertThrows(PermissionException.class, () -> service.delete(22));
+        service.list(PacienteFilter.NONE, 1, 10);
+        assertTrue(audit.entries().isEmpty(), "only successful writes are audited: " + audit.entries());
+    }
+
     // ------------------------------------------------------------ age
 
     @Test
@@ -266,5 +324,32 @@ class PacienteServiceTest {
         assertEquals(4, leap.edad(LocalDate.of(2004, 2, 29)));
         Paciente unknown = new Paciente(3L, "3", "A", "B", null, "F", null, null, null, true);
         assertNull(unknown.edad(LocalDate.of(2026, 1, 1)));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheSameFilterAndScopeAsTheList() {
+        PacienteFilter mujeres = new PacienteFilter("F", null, null);
+        ExportRows<Paciente> rows = service.listForExport(mujeres);
+        assertEquals(service.list(mujeres, 1, 100).items(), rows.items());
+        assertEquals(2, rows.total());
+        assertFalse(rows.truncated());
+
+        current = MEDICO;
+        assertEquals(java.util.List.of(20L, 23L),
+            service.listForExport(null).items().stream().map(Paciente::id).sorted().toList(),
+            "a medico exports only the patients it attended");
+    }
+
+    @Test
+    void exportIsForbiddenWhereTheListIs() {
+        current = PACIENTE;
+        assertThrows(PermissionException.class, () -> service.listForExport(PacienteFilter.NONE));
+        current = null;
+        assertThrows(PermissionException.class, () -> service.listForExport(PacienteFilter.NONE));
+        current = ADMIN;
+        assertThrows(ValidationException.class,
+            () -> service.listForExport(new PacienteFilter(null, null, "x".repeat(1000))));
     }
 }

@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.hospisoft.dao.InMemoryMedicoRepository;
 import com.hospisoft.dao.MedicoFilter;
+import com.hospisoft.model.AccionAuditoria;
 import com.hospisoft.model.Medico;
+import com.hospisoft.model.ModuloAuditoria;
 import com.hospisoft.model.Page;
 import com.hospisoft.model.Rol;
 import java.util.List;
@@ -24,6 +26,7 @@ class MedicoServiceTest {
 
     private InMemoryMedicoRepository repository;
     private SessionContext current;
+    private RecordingAuditLog audit;
     private MedicoService service;
 
     private static Medico medico(Long id, String documento, String nombres, String apellidos, String especialidad,
@@ -38,7 +41,45 @@ class MedicoServiceTest {
         repository.add(medico(11L, "1002", "Laura", "Lopez", "Pediatria", true));
         repository.add(medico(12L, "1003", "Jorge", "Ruiz", "Cardiologia", false));
         current = ADMIN;
-        service = new MedicoService(repository, () -> Optional.ofNullable(current));
+        audit = new RecordingAuditLog();
+        service = new MedicoService(repository, () -> Optional.ofNullable(current), audit);
+    }
+
+    // ------------------------------------------------------------ audit
+
+    @Test
+    void saveIsAuditedAsCrearOrEditar() {
+        Medico created = service.save(medico(null, "1004", "Ana", "Mora", "Dermatologia", true));
+        RecordingAuditLog.Entry insert = audit.only();
+        assertEquals(AccionAuditoria.CREAR, insert.accion());
+        assertEquals(ModuloAuditoria.MEDICO, insert.modulo());
+        assertEquals(created.id(), insert.idRegistro());
+        assertEquals("Médico 1004 - Ana Mora (Dermatologia)", insert.detalle());
+        audit.clear();
+
+        service.save(medico(11L, "1002", "Laura", "Lopez", "Pediatria", false));
+        RecordingAuditLog.Entry update = audit.only();
+        assertEquals(AccionAuditoria.EDITAR, update.accion());
+        assertEquals(11L, update.idRegistro());
+    }
+
+    @Test
+    void deleteIsAuditedPerOutcome() {
+        service.delete(12);
+        assertEquals(AccionAuditoria.ELIMINAR, audit.only().accion());
+        assertEquals(12L, audit.only().idRegistro());
+        audit.clear();
+        repository.markHistory(10L);
+        service.delete(10);
+        assertEquals(AccionAuditoria.DESACTIVAR, audit.only().accion());
+        assertEquals("Médico 1001 - Carlos Garcia (Medicina General) (tiene historial asociado)", audit.only().detalle());
+    }
+
+    @Test
+    void rejectedWritesAreNotAudited() {
+        assertThrows(ValidationException.class, () -> service.save(medico(null, "", "A", "B", "C", true)));
+        assertThrows(NotFoundException.class, () -> service.delete(999));
+        assertTrue(audit.entries().isEmpty());
     }
 
     // ------------------------------------------------------------ permissions
@@ -213,5 +254,21 @@ class MedicoServiceTest {
     @Test
     void deleteUnknownIsNotFound() {
         assertThrows(NotFoundException.class, () -> service.delete(999));
+    }
+
+    // ------------------------------------------------------------ export
+
+    @Test
+    void exportUsesTheSameFilterAsTheListAndIsAdminOnly() {
+        MedicoFilter activos = new MedicoFilter(null, true, null);
+        ExportRows<Medico> rows = service.listForExport(activos);
+        assertEquals(service.list(activos, 1, 100).items(), rows.items());
+        assertEquals(List.of(10L, 11L), rows.items().stream().map(Medico::id).sorted().toList());
+        assertEquals(3, service.listForExport(null).items().size());
+
+        current = MEDICO;
+        assertThrows(PermissionException.class, () -> service.listForExport(MedicoFilter.NONE));
+        current = PACIENTE;
+        assertThrows(PermissionException.class, () -> service.listForExport(MedicoFilter.NONE));
     }
 }

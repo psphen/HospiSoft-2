@@ -61,12 +61,14 @@ class AtencionDaoTest {
     }
 
     @Test
-    void historiaByIdAndRecetasByHistoria() {
-        jdbc.rows(historiaRow(7, 3)).rows();
-        assertTrue(dao.findHistoriaById(7).isPresent());
+    void historiaByIdCarriesItsRecetas() {
+        jdbc.rows(historiaRow(7, 3)).rows(recetaRow(1, true));
+        HistoriaView view = dao.findHistoriaById(7).orElseThrow();
         assertEquals(AtencionDao.SELECT_HISTORIA + " WHERE h.id = ?", jdbc.call(0).sql);
-        jdbc.rows(recetaRow(1, true));
-        List<RecetaView> lines = dao.findRecetasByHistoria(7);
+        assertEquals(List.of(7L), jdbc.call(0).values());
+        assertEquals(AtencionDao.SELECT_RECETAS_BY_HISTORIA, jdbc.call(1).sql);
+        assertEquals(List.of(7L), jdbc.call(1).values());
+        List<RecetaView> lines = view.recetas();
         assertEquals(1, lines.size());
         assertEquals("MED-001", lines.get(0).codigo());
     }

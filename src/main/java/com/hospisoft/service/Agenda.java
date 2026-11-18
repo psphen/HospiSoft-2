@@ -17,9 +17,5 @@ public record Agenda(long idMedico, LocalDate fecha, List<Slot> slots) {
         public Slot {
             citas = List.copyOf(citas);
         }
-
-        public boolean libre() {
-            return citas.isEmpty();
-        }
     }
 }

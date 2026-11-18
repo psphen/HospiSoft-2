@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HospiSoft — Auditoría</title>
+  <link href="vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="min-vh-100">
+    <aside class="sidebar d-flex flex-column" id="sidebar">
+      <div class="p-3 border-bottom" style="border-color: rgba(255,255,255,.15) !important;">
+        <div class="d-flex align-items-center gap-2">
+          <div>
+            <div class="fw-bold fs-5 lh-1 text-white">HospiSoft</div>
+            <small class="text-white-50">Sistema Hospitalario</small>
+          </div>
+        </div>
+      </div>
+      <ul class="list-unstyled mb-0 flex-grow-1 pt-2">
+        <li><a href="index.html" class="nav-link"><i class="fas fa-home" style="width:1.25rem;text-align:center"></i> Dashboard</a></li>
+        <li><a href="medicos.html" class="nav-link"><i class="fas fa-user-md" style="width:1.25rem;text-align:center"></i> Médicos</a></li>
+        <li><a href="pacientes.html" class="nav-link"><i class="fas fa-users" style="width:1.25rem;text-align:center"></i> Pacientes</a></li>
+        <li><a href="citas.html" class="nav-link"><i class="fas fa-calendar-check" style="width:1.25rem;text-align:center"></i> Citas</a></li>
+        <li><a href="medicamentos.html" class="nav-link"><i class="fas fa-capsules" style="width:1.25rem;text-align:center"></i> Medicamentos</a></li>
+        <li><a href="auditoria.html" class="nav-link active"><i class="fas fa-clipboard-list" style="width:1.25rem;text-align:center"></i> Auditoría</a></li>
+      </ul>
+      <ul class="list-unstyled mb-0">
+        <li><a href="#" class="nav-link" id="nav-logout"><i class="fas fa-sign-out-alt" style="width:1.25rem;text-align:center"></i> Cerrar sesión</a></li>
+      </ul>
+      <div class="p-3 border-top text-white-50 small" style="border-color: rgba(255,255,255,.15) !important;">
+        <i class="fas fa-circle text-success" style="font-size:.5rem;vertical-align:middle"></i>
+        <span class="ms-1">Sistema activo</span>
+      </div>
+    </aside>
+
+    <main class="main-content d-flex flex-column">
+      <header class="top-navbar sticky-top bg-white border-bottom shadow-sm d-flex align-items-center justify-content-between px-4" style="height:60px;">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn d-md-none p-0" type="button" onclick="document.getElementById('sidebar').classList.toggle('show')">
+            <i class="fas fa-bars fs-5"></i>
+          </button>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <i class="fas fa-bell text-muted"></i>
+          <div class="d-flex align-items-center gap-2 text-muted small">
+            <span id="topbar-user-name">Dr. Admin</span>
+            <span id="topbar-user-avatar" class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width:36px;height:36px;background:var(--clr-light);color:var(--clr-text);font-weight:700;">A</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="p-4 flex-grow-1">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+          <div>
+            <h4 class="mb-0 fw-semibold">Auditoría</h4>
+            <small class="text-muted">Registro de solo lectura: quién hizo qué y cuándo</small>
+          </div>
+          <!-- Header actions (export); the audit log itself is read-only. -->
+          <div class="d-flex gap-2" id="header-actions">
+            <div class="dropdown d-none" id="export-menu">
+              <button class="btn btn-outline-primary dropdown-toggle" type="button" id="btn-export" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-file-export me-1"></i> Exportar</button>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="btn-export">
+                <li><button class="dropdown-item" type="button" data-export-format="xlsx"><i class="fas fa-file-excel me-2 text-success"></i>Excel (.xlsx)</button></li>
+                <li><button class="dropdown-item" type="button" data-export-format="pdf"><i class="fas fa-file-pdf me-2 text-danger"></i>PDF</button></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3 p-3 bg-white rounded-3 shadow-sm">
+          <div class="input-group" style="max-width:240px;">
+            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" class="form-control" id="filter-search" placeholder="Usuario o detalle..." maxlength="100">
+          </div>
+          <select class="form-select" id="filter-accion" style="max-width:200px;" aria-label="Acción">
+            <option value="">Todas las acciones</option>
+            <option value="CREAR">Crear</option>
+            <option value="EDITAR">Editar</option>
+            <option value="ELIMINAR">Eliminar</option>
+            <option value="DESACTIVAR">Desactivar</option>
+            <option value="REPROGRAMAR">Reprogramar</option>
+            <option value="CANCELAR">Cancelar</option>
+            <option value="INICIAR_ATENCION">Iniciar atención</option>
+            <option value="FINALIZAR_ATENCION">Finalizar atención</option>
+            <option value="LOGIN">Inicio de sesión</option>
+            <option value="LOGIN_FALLIDO">Inicio de sesión fallido</option>
+            <option value="LOGOUT">Cierre de sesión</option>
+            <option value="EXPORTAR">Exportar</option>
+          </select>
+          <select class="form-select" id="filter-modulo" style="max-width:170px;" aria-label="Módulo">
+            <option value="">Todos los módulos</option>
+            <option value="PACIENTE">Pacientes</option>
+            <option value="MEDICO">Médicos</option>
+            <option value="MEDICAMENTO">Medicamentos</option>
+            <option value="CITA">Citas</option>
+            <option value="ATENCION">Atención</option>
+            <option value="SESION">Sesión</option>
+            <option value="AUDITORIA">Auditoría</option>
+          </select>
+          <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted" for="filter-desde">Desde</label>
+            <input type="date" class="form-control" id="filter-desde" style="max-width:160px;" placeholder="AAAA-MM-DD">
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted" for="filter-hasta">Hasta</label>
+            <input type="date" class="form-control" id="filter-hasta" style="max-width:160px;" placeholder="AAAA-MM-DD">
+          </div>
+          <button class="btn btn-outline-secondary" id="btn-filter"><i class="fas fa-sync-alt me-1"></i>Filtrar</button>
+        </div>
+        <div class="alert alert-danger small d-none" id="filter-alert" role="alert"></div>
+
+        <div class="bg-white rounded-3 shadow-sm overflow-hidden">
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead class="table-primary">
+                <tr>
+                  <th class="text-uppercase small">Fecha</th>
+                  <th class="text-uppercase small">Usuario</th>
+                  <th class="text-uppercase small">Rol</th>
+                  <th class="text-uppercase small">Acción</th>
+                  <th class="text-uppercase small">Módulo</th>
+                  <th class="text-uppercase small">Registro</th>
+                  <th class="text-uppercase small">Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="auditoria-body">
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <small class="text-muted" id="page-summary">Mostrando 0 de 0 registros</small>
+            <nav>
+              <ul class="pagination pagination-sm mb-0" id="pagination">
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/crud.js"></script>
+  <script src="js/auditoria.js"></script>
+</body>
+</html>
