@@ -24,7 +24,6 @@
   </properties>
 
   <dependencies>
-    <!-- Runtime: JavaFX (UI + WebView) -->
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-controls</artifactId>
@@ -36,14 +35,12 @@
       <version>${javafx.version}</version>
     </dependency>
 
-    <!-- Runtime: PostgreSQL JDBC driver -->
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>${postgresql.version}</version>
     </dependency>
 
-    <!-- Runtime: list export. Apache POI (Apache-2.0) writes .xlsx; OpenPDF (LGPL-2.1/MPL-2.0) writes PDF. -->
     <dependency>
       <groupId>org.apache.poi</groupId>
       <artifactId>poi-ooxml</artifactId>
@@ -55,7 +52,6 @@
       <version>${openpdf.version}</version>
     </dependency>
 
-    <!-- Test only -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -79,7 +75,6 @@
         <version>3.5.2</version>
       </plugin>
 
-      <!-- Dev run: ./mvnw javafx:run -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
@@ -89,7 +84,6 @@
         </configuration>
       </plugin>
 
-      <!-- Fat jar: target/hospisoft-desktop.jar -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -127,24 +121,11 @@
     </plugins>
   </build>
 
-
   <profiles>
-    <!--
-      Native app-image built with the JDK's own jpackage (no installer, so no WiX/Inno needed):
-          mvnw.cmd clean package -Ppackage-win
-      produces target/dist/HospiSoft/HospiSoft.exe. exec-maven-plugin is a BUILD plugin, like
-      shade, surefire and javafx-maven-plugin: the runtime dependencies (JavaFX, PostgreSQL, POI,
-      OpenPDF) are untouched, nothing is added to the application classpath.
-    -->
     <profile>
       <id>package-win</id>
       <build>
         <plugins>
-          <!--
-            jpackage refuses to write into an existing application directory, so a second
-            "package -Ppackage-win" without a clean would fail. Plugins bound to the same phase run
-            in declaration order, so this removal happens before the image is produced.
-          -->
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-clean-plugin</artifactId>
@@ -167,7 +148,6 @@
               </execution>
             </executions>
           </plugin>
-          <!-- jpackage copies its whole input directory, so stage only the fat jar there. -->
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-resources-plugin</artifactId>
@@ -222,13 +202,6 @@
                     <argument>${main.class}</argument>
                     <argument>--java-options</argument>
                     <argument>-Dfile.encoding=UTF-8</argument>
-                    <!--
-                      Without this, jpackage links every JDK module into the image. These are the
-                      ones the application really needs: java.sql and java.naming for the
-                      PostgreSQL driver, jdk.crypto.ec for the TLS handshake against Supabase,
-                      java.desktop and jdk.jsobject for JavaFX and the WebView bridge,
-                      jdk.unsupported for the internal access JavaFX still performs.
-                    -->
                     <argument>--add-modules</argument>
                     <argument>java.base,java.datatransfer,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.security.sasl,java.sql,java.transaction.xa,java.xml,jdk.crypto.ec,jdk.jsobject,jdk.unsupported</argument>
                     <argument>--dest</argument>
@@ -242,11 +215,4 @@
       </build>
     </profile>
   </profiles>
-
-  <!--
-    An .msi or .exe installer needs WiX or Inno Setup installed on the machine; the app-image
-    profile above is the dependency-free option. To build an installer once WiX is available,
-    change the jpackage type argument from app-image to msi and add the win-shortcut and
-    win-menu flags.
-  -->
 </project>

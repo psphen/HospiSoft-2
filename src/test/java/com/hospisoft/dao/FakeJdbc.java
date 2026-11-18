@@ -14,14 +14,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/**
- * Minimal JDBC recorder for DAO tests: records every prepared SQL string with its bound parameters
- * (in index order) and answers each execute with the next canned outcome: rows for a query, an
- * affected-row count for an update, or an SQLException to throw.
- */
 public final class FakeJdbc {
-
-    /** One prepared statement: its SQL, the parameters bound by index and the indexes set to NULL. */
     public static final class Call {
         public final String sql;
         public final Map<Integer, Object> params = new TreeMap<>();
@@ -31,23 +24,19 @@ public final class FakeJdbc {
             this.sql = sql;
         }
 
-        /** Bound values in index order (NULLs appear as null). */
         public List<Object> values() {
             return new ArrayList<>(params.values());
         }
     }
 
     public final List<Call> calls = new ArrayList<>();
-    /** Connection lifecycle events: setAutoCommit(false|true), commit, rollback. */
     public final List<String> events = new ArrayList<>();
-    /** Optional failures injected into the lifecycle methods (consumed once). */
     public SQLException failCommit;
     public SQLException failRollback;
     public SQLException failSetAutoCommitFalse;
     public SQLException failSetAutoCommitTrue;
     private final Deque<Object> outcomes = new ArrayDeque<>();
 
-    /** Canned query result: each row is a column-name -> value map in column order. */
     @SafeVarargs
     public final FakeJdbc rows(Map<String, Object>... rows) {
         outcomes.add(List.of(rows));
@@ -133,7 +122,7 @@ public final class FakeJdbc {
                     case "hashCode": return System.identityHashCode(proxy);
                     case "equals": return proxy == args[0];
                     case "toString": return "FakeConnection";
-                    default: return null; // close, setAutoCommit, ...
+                    default: return null;
                 }
             });
     }
@@ -172,7 +161,7 @@ public final class FakeJdbc {
                     case "hashCode": return System.identityHashCode(proxy);
                     case "equals": return proxy == args[0];
                     case "toString": return "FakeStatement(" + call.sql + ")";
-                    default: return null; // close, ...
+                    default: return null;
                 }
             });
     }

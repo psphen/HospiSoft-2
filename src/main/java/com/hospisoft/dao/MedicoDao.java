@@ -11,14 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * JDBC implementation of {@link MedicoRepository}. PreparedStatement only: the WHERE clause is
- * assembled from constant fragments and every user value travels as a parameter.
- *
- * <p>Constraint violations are translated: UNIQUE on documento (23505) ->
- * {@code ValidationException}; FOREIGN KEY on delete (23503) -> {@link HasHistoryException};
- * zero affected rows -> {@code NotFoundException}.
- */
 public final class MedicoDao implements MedicoRepository {
 
     static final String COLUMNS =
@@ -234,9 +226,6 @@ public final class MedicoDao implements MedicoRepository {
         });
     }
 
-    // ------------------------------------------------------------ helpers
-
-    /** Returns the typed exception when there is one; otherwise the original SQLException is rethrown. */
     private static SQLException rethrow(SQLException ex, RuntimeException typed) throws SQLException {
         if (typed != null) {
             throw typed;
@@ -253,7 +242,6 @@ public final class MedicoDao implements MedicoRepository {
         }
     }
 
-    /** Binds the seven entity columns starting at index 1; returns the next free index. */
     private static int bindEntity(PreparedStatement ps, Medico medico) throws SQLException {
         ps.setString(1, medico.documento());
         ps.setString(2, medico.nombres());

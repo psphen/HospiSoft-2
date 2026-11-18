@@ -14,12 +14,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * JDBC implementation of {@link AuditoriaRepository}. PreparedStatement only: the WHERE clause is
- * assembled from constant fragments and every user value travels as a parameter. {@code fecha} is
- * never bound on insert (the column default {@code now()} is the authoritative timestamp) and is
- * read as {@link OffsetDateTime} (TIMESTAMPTZ).
- */
 public final class AuditoriaDao implements AuditoriaRepository {
 
     static final String COLUMNS =

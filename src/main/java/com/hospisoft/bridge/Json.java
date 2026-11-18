@@ -6,23 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Minimal dependency-free JSON writer and parser.
- *
- * <p>Writer accepts: Map (String keys), Iterable, arrays of objects, String, CharSequence, Character,
- * Number, Boolean, Enum (as its name), null. Anything else is written as {@code String.valueOf}.
- * U+2028 / U+2029 are escaped so the output is also a valid JavaScript string literal.
- *
- * <p>Parser returns: LinkedHashMap, ArrayList, String, Long (integers), Double (decimals/exponents),
- * Boolean, null. Strict: no leading zeros, no leading '+' or '.', finite numbers only, nesting
- * limited to {@link #MAX_DEPTH}. Malformed input raises {@link ParseException}.
- */
 public final class Json {
-
-    /** Maximum nesting of objects/arrays accepted by the parser. */
     public static final int MAX_DEPTH = 64;
 
-    /** Unchecked: the text is not valid JSON. */
     public static class ParseException extends BadRequestException {
         public ParseException(String message) {
             super(message);
@@ -31,8 +17,6 @@ public final class Json {
 
     private Json() {
     }
-
-    // ---------------------------------------------------------------- writer
 
     public static String write(Object value) {
         StringBuilder sb = new StringBuilder(64);
@@ -126,8 +110,6 @@ public final class Json {
         sb.append('"');
     }
 
-    // ---------------------------------------------------------------- parser
-
     public static Object parse(String text) {
         if (text == null) {
             throw new ParseException("JSON text is null");
@@ -142,7 +124,6 @@ public final class Json {
         return value;
     }
 
-    /** Parses text that must be a JSON object. */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseObject(String text) {
         Object value = parse(text);
@@ -310,7 +291,6 @@ public final class Json {
             }
         }
 
-        /** Exactly four hex digits; Integer.parseInt would accept signs, so validate by hand. */
         char readUnicodeEscape() {
             if (pos + 4 > s.length()) {
                 throw error("Incomplete unicode escape");
@@ -377,9 +357,7 @@ public final class Json {
             if (!decimal) {
                 try {
                     return Long.parseLong(token);
-                } catch (NumberFormatException ex) {
-                    // integer too large for long: degrade to double below
-                }
+                } catch (NumberFormatException ex) {}
             }
             double d;
             try {

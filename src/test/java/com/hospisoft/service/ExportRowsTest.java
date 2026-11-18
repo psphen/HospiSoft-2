@@ -10,10 +10,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
-/** Walking the repository pages for an export: every page until the total or the row cap. */
 class ExportRowsTest {
-
-    /** A paged source over {@code data} that records the requested page sizes. */
     private static ExportRows.PageSource<Integer> source(List<Integer> data, long reportedTotal, List<String> calls) {
         return (page, pageSize) -> {
             calls.add(page + "x" + pageSize);

@@ -11,15 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * MVC controller of the dashboard: receives the View's request from the JS bridge, delegates to
- * {@link DashboardService} (the Model) and returns the DTO. One call answers the whole panel:
- * {@code dashboard {}} ->
- * {@code {"rol","kpis":[{"clave","etiqueta","valor","detalle"}],"proximasCitas":[citaDto],
- * "resumenHoy":{"total","atendidas","enCurso","pendientes","canceladas"},"atendidasPct":number|null,
- * "duracionPromedioMin":number|null}}. Values are already scoped to the session's role; the page
- * only renders what the payload carries (labels included).
- */
 public final class DashboardController implements Controller {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
@@ -35,12 +26,10 @@ public final class DashboardController implements Controller {
         bridge.register("dashboard", this::load);
     }
 
-    /** The payload is ignored. */
     private Object load(String payload) {
         return toMap(dashboard.load(), dashboard.zone());
     }
 
-    /** Slim projection: only what the panel paints, never the clinical detail of the cita. */
     private static Map<String, Object> proximaToMap(CitaView view, AppZone zone) {
         var cita = view.cita();
         Map<String, Object> map = new LinkedHashMap<>();

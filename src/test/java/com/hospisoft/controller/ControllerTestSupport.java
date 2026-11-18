@@ -27,17 +27,13 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-/** Shared helpers for the controller tests. */
 final class ControllerTestSupport {
-
-    /** 2026-11-04 10:00 in Bogota: the export file names end in _2026-11-04. */
     static final Clock EXPORT_CLOCK = Clock.fixed(Instant.parse("2026-11-04T15:00:00Z"), ZoneOffset.UTC);
     static final AppZone EXPORT_ZONE = new AppZone(ZoneId.of("America/Bogota"));
 
     private ControllerTestSupport() {
     }
 
-    /** Method names {@code controller} adds to a fresh bridge (the bridge's own built-ins excluded). */
     static Set<String> registeredNames(Controller controller) {
         Bridge bridge = new Bridge(new AuthService(username -> Optional.empty()), new SessionHolder(),
             StartupStatus::ok, page -> { }, script -> { });
@@ -52,12 +48,10 @@ final class ControllerTestSupport {
         }
     }
 
-    /** Export use case writing through {@code saver}, auditing into {@code audit}. */
     static ExportService exports(FakeFileSaver saver, AuditLog audit, SessionHolder sessions) {
         return new ExportService(saver, audit, sessions::current, EXPORT_CLOCK, EXPORT_ZONE, line -> { });
     }
 
-    /** The header row and the data rows of an exported workbook, as text. */
     static List<List<String>> table(Path xlsx) throws IOException {
         try (InputStream in = Files.newInputStream(xlsx); XSSFWorkbook book = new XSSFWorkbook(in)) {
             XSSFSheet sheet = book.getSheetAt(0);

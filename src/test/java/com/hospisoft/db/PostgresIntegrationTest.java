@@ -35,12 +35,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-/**
- * Opt-in integration test against a real PostgreSQL (Supabase session pooler). Enabled only when
- * HOSPISOFT_TEST_DB_URL, HOSPISOFT_TEST_DB_USER and HOSPISOFT_TEST_DB_PASSWORD are set; otherwise
- * skipped. Every test runs inside a transaction that is rolled back, so no data is left behind.
- * Requires db/schema.sql to have been applied.
- */
 @EnabledIfEnvironmentVariable(named = "HOSPISOFT_TEST_DB_URL", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "HOSPISOFT_TEST_DB_USER", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "HOSPISOFT_TEST_DB_PASSWORD", matches = ".+")
@@ -59,11 +53,6 @@ class PostgresIntegrationTest {
         connection.setAutoCommit(false);
     }
 
-    /**
-     * Rolls back the statement-scoped transaction and then removes the rows the DAO tests committed
-     * through the pool. The immutability triggers are disabled only for that cleanup and restored
-     * right after, so the test never leaves data behind.
-     */
     @AfterEach
     void cleanUp() throws SQLException {
         try {
@@ -80,7 +69,6 @@ class PostgresIntegrationTest {
                 st.execute("ALTER TABLE receta DISABLE TRIGGER trg_receta_immutable");
                 st.execute("ALTER TABLE historia_clinica DISABLE TRIGGER trg_historia_clinica_immutable");
                 try {
-                    // reverse foreign-key order
                     st.executeUpdate("DELETE FROM receta WHERE id_historia IN "
                         + "(SELECT id FROM historia_clinica WHERE diagnostico LIKE '" + MARKER + "%')");
                     st.executeUpdate("DELETE FROM historia_clinica WHERE diagnostico LIKE '" + MARKER + "%'");
@@ -98,7 +86,6 @@ class PostgresIntegrationTest {
         committed.clear();
     }
 
-    /** Marks every row a committed (pool-backed) test creates, so cleanUp can find them. */
     private static final String MARKER = "[integration-test]";
     private final List<String> committed = new ArrayList<>();
 
@@ -134,7 +121,6 @@ class PostgresIntegrationTest {
                 return id;
             });
 
-            // the joined reads see the committed rows
             HistoriaView stored = dao.findHistoriaByCita(cita).orElseThrow();
             assertEquals(historia, stored.historia().id());
             assertEquals(1, stored.recetas().size());
@@ -144,13 +130,11 @@ class PostgresIntegrationTest {
             assertEquals(1, page.total());
             assertEquals(1, dao.findRecetasPage(paciente, 1, 10).total());
 
-            // a second close finds the cita FINALIZADA and the historia already there
             assertEquals(0, (int) dao.inTransaction(tx -> tx.finalizar(cita, medico, "again")));
             ConflictException duplicate = assertThrows(ConflictException.class, () -> dao.inTransaction(tx ->
                 tx.insertHistoria(cita, paciente, medico, MARKER + " dup", null, null)));
             assertEquals(AtencionDao.ALREADY_CLOSED, duplicate.userMessage());
 
-            // the stock guard refuses to go below zero on the real column
             assertEquals(0, (int) dao.inTransaction(tx -> tx.decrementStock(medicamento, 999)));
             assertEquals(6, stockOfOn(medicamento));
         }
@@ -207,7 +191,6 @@ class PostgresIntegrationTest {
         }
     }
 
-    /** The audit log is append-only: rows can be inserted (inside this rolled-back transaction) but never changed. */
     @Test
     void auditoriaIsAppendOnly() throws SQLException {
         long id;
@@ -241,10 +224,6 @@ class PostgresIntegrationTest {
         connection.rollback(beforeCheck);
     }
 
-    /**
-     * The dashboard is the only screen whose SQL is composed at runtime (scope fragments, GROUP BY,
-     * EXTRACT and AVG), so every shape it can take is executed here against a real PostgreSQL.
-     */
     @Test
     void theDashboardSnapshotRunsForEveryScope() {
         try (ConnectionPool pool = readOnlyPool()) {
@@ -355,7 +334,6 @@ class PostgresIntegrationTest {
                 historia = rs.getLong(1);
             }
         }
-        // the UPDATE/DELETE triggers must raise; the transaction needs a savepoint to continue
         Savepoint savepoint = connection.setSavepoint();
         SQLException update = assertThrows(SQLException.class, () -> {
             try (PreparedStatement ps = connection.prepareStatement(
@@ -377,7 +355,6 @@ class PostgresIntegrationTest {
         assertTrue(delete.getMessage().toLowerCase().contains("immutable"), delete.getMessage());
         connection.rollback(second);
 
-        // a second historia for the same cita violates the UNIQUE constraint on id_cita
         Savepoint third = connection.setSavepoint();
         SQLException duplicate = assertThrows(SQLException.class, () -> {
             try (PreparedStatement ps = connection.prepareStatement(

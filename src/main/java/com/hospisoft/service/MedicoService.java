@@ -12,11 +12,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/**
- * Medico use cases. Only ADMIN may use this service in this phase. Input is trimmed and validated
- * against the schema limits; deleting a medico with history deactivates it instead. Every successful
- * write is recorded in the audit log.
- */
 public final class MedicoService {
 
     static final int MAX_DOCUMENTO = 20;
@@ -45,7 +40,6 @@ public final class MedicoService {
         return medicos.findPage(safe, page, pageSize);
     }
 
-    /** Every row {@link #list} would page through (same permission), up to the export cap. */
     public ExportRows<Medico> listForExport(MedicoFilter filter) {
         return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
     }
@@ -60,15 +54,10 @@ public final class MedicoService {
         return medicos.findEspecialidades();
     }
 
-    /** Insert when the id is null or 0, update otherwise, with {@code activo} taken from the input. */
     public Medico save(Medico input) {
         return save(input, input.activo());
     }
 
-    /**
-     * @param activo null keeps the stored value on update (true on insert); otherwise the new value
-     * @return the stored row
-     */
     public Medico save(Medico input, Boolean activo) {
         access.require(Rol.ADMIN);
         Medico clean = normalize(input);
@@ -102,7 +91,6 @@ public final class MedicoService {
         return outcome;
     }
 
-    /** Audit text, e.g. "Médico 1001001001 - Carlos Garcia (Medicina General)". */
     private static String detalle(Medico m) {
         return "Médico " + m.documento() + " - " + m.nombres() + " " + m.apellidos() + " (" + m.especialidad() + ")";
     }
@@ -116,7 +104,6 @@ public final class MedicoService {
             medicos.delete(id);
             return DeleteOutcome.DELETED;
         } catch (HasHistoryException ex) {
-            // history appeared between the check and the delete: deactivate instead
             medicos.setActivo(id, false);
             return DeleteOutcome.DEACTIVATED;
         }

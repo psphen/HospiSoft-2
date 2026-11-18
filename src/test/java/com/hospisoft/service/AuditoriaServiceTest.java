@@ -52,8 +52,6 @@ class AuditoriaServiceTest {
         return repository.rows().get(0);
     }
 
-    // ------------------------------------------------------------ writes
-
     @Test
     void recordStampsTheSessionUser() {
         current = MEDICO;
@@ -120,7 +118,7 @@ class AuditoriaServiceTest {
 
     @Test
     void truncationNeverSplitsASurrogatePair() {
-        String detalle = "a".repeat(AuditoriaService.MAX_DETALLE - 1) + "😀tail"; // emoji straddles the limit
+        String detalle = "a".repeat(AuditoriaService.MAX_DETALLE - 1) + "😀tail";
         String cut = AuditoriaService.truncate(detalle, AuditoriaService.MAX_DETALLE);
         assertEquals(AuditoriaService.MAX_DETALLE - 1, cut.length());
         assertFalse(Character.isHighSurrogate(cut.charAt(cut.length() - 1)));
@@ -176,8 +174,6 @@ class AuditoriaServiceTest {
         });
     }
 
-    // ------------------------------------------------------------ reads
-
     @Test
     void onlyAdminCanList() {
         current = MEDICO;
@@ -231,8 +227,6 @@ class AuditoriaServiceTest {
         assertEquals("second", page.items().get(0).detalle());
         assertEquals(ZONE, service.zone());
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportUsesTheListFilterAndIsAdminOnly() {

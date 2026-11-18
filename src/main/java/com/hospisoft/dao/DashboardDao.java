@@ -11,10 +11,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * JDBC implementation of {@link DashboardRepository}: every aggregate is a constant statement with
- * parameters, and the whole snapshot runs on one borrowed connection (read-only, no transaction).
- */
 public final class DashboardDao implements DashboardRepository {
 
     static final String COUNT_MEDICOS_ACTIVOS = "SELECT count(*) FROM medico WHERE activo";
@@ -23,7 +19,6 @@ public final class DashboardDao implements DashboardRepository {
 
     static final String COUNT_MEDICAMENTOS_ACTIVOS = "SELECT count(*) FROM medicamento WHERE activo";
 
-    /** Distinct patients a medico has seen: cancelled citas do not count (phase 4 scope rule). */
     static final String COUNT_PACIENTES_DE_MEDICO =
         "SELECT count(DISTINCT id_paciente) FROM cita WHERE id_medico = ? AND estado <> 'CANCELADA'";
 
@@ -52,7 +47,6 @@ public final class DashboardDao implements DashboardRepository {
         WHERE estado = 'FINALIZADA' AND hora_inicio_real IS NOT NULL AND hora_fin_real IS NOT NULL
           AND fecha_hora_programada >= ? AND fecha_hora_programada < ?""";
 
-    /** Only PROGRAMADA, so the list agrees with the "citas pendientes" KPI. */
     static final String PROXIMAS_CITAS = CitaDao.SELECT
         + " WHERE c.estado = 'PROGRAMADA' AND c.fecha_hora_programada >= ?";
 
@@ -64,7 +58,6 @@ public final class DashboardDao implements DashboardRepository {
         this.pool = pool;
     }
 
-    /** Scope fragment appended to a WHERE that already has a condition. */
     static String scopeClause(Scope scope, String alias) {
         if (scope.idMedico() != null) {
             return " AND " + alias + "id_medico = ?";
@@ -75,15 +68,12 @@ public final class DashboardDao implements DashboardRepository {
         return "";
     }
 
-    /** The single scope parameter, or null when the scope is global. */
     private static Long scopeParam(Scope scope) {
         return scope.idMedico() != null ? scope.idMedico() : scope.idPaciente();
     }
 
-    /** Upper bound for the upcoming list: the panel shows a handful of rows, never a full agenda. */
     static final int MAX_LIMIT = 50;
 
-    /** PostgreSQL rejects a negative LIMIT, so the value is clamped before it reaches the driver. */
     static int safeLimit(int limit) {
         return Math.max(0, Math.min(limit, MAX_LIMIT));
     }
@@ -130,7 +120,6 @@ public final class DashboardDao implements DashboardRepository {
         });
     }
 
-    /** Binds the non-null bounds in order and then the scope id, if any. */
     private static long count(Connection connection, String sql, OffsetDateTime from, OffsetDateTime to, Long scopeId)
         throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {

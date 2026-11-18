@@ -22,11 +22,6 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * In-memory fake of {@link AtencionRepository} backed by the other in-memory repositories.
- * Writes apply directly; {@link #failOnRecetaInsert} simulates a failure late in the transaction
- * so tests can assert that nothing was persisted (the fake undoes its own writes).
- */
 public final class InMemoryAtencionRepository implements AtencionRepository {
 
     private final InMemoryCitaRepository citas;
@@ -39,11 +34,8 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
     private long nextHistoriaId = 1;
     private long nextRecetaId = 1;
 
-    /** Lock calls in order, as "medico:ID" / "medicamento:ID". */
     public final List<String> locks = new ArrayList<>();
-    /** When set, the insert of the receta at this index (0-based) throws. */
     public Integer failOnRecetaInsert;
-    /** When true, every decrementStock reports 0 affected rows (simulates a broken invariant). */
     public boolean failDecrementStock;
     private int recetaInsertCount;
     private boolean transactionOpen;
@@ -75,7 +67,6 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
 
     @Override
     public <T> T inTransaction(Function<AtencionTx, T> work) {
-        // snapshot for the rollback simulation
         Map<Long, HistoriaClinica> historiasBefore = new LinkedHashMap<>(historias);
         Map<Long, Receta> recetasBefore = new LinkedHashMap<>(recetas);
         List<Medicamento> medicamentosBefore = medicamentos.allRows();
@@ -97,7 +88,6 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
         }
     }
 
-    /** True while a transaction body runs (lets tests prove side effects happen after the commit). */
     public boolean transactionOpen() {
         return transactionOpen;
     }
@@ -190,8 +180,6 @@ public final class InMemoryAtencionRepository implements AtencionRepository {
             return 1;
         }
     }
-
-    // ------------------------------------------------------------ reads
 
     private HistoriaView view(HistoriaClinica h, boolean withRecetas) {
         Medico m = medicos.findById(h.idMedico()).orElseThrow();

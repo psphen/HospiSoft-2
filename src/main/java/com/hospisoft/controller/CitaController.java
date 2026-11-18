@@ -26,22 +26,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * MVC controller of the cita module: receives the View's request from the JS bridge, parses the
- * payload, delegates to {@link CitaService} (the Model) and returns the DTO.
- *
- * <p>listCitas {@code {"filter":{"texto","fecha":"yyyy-MM-dd","estado","idMedico","rango"},"page","pageSize"}}
- * (exportCitas takes the same filter plus {@code "format":"xlsx|pdf"}, see {@link Exports});
- * getCita / cancelarCita {@code {"id"}}; saveCita {@code {"id":0|N,"idMedico","idPaciente","fecha","hora","motivo"}}
- * (id &gt; 0 reschedules); agendaMedico {@code {"idMedico"?,"fecha"?}}; listMedicosSelect / listPacientesSelect
- * (ADMIN). When {@code filter.fecha} is present the {@code rango} preset is ignored. Agenda slots carry
- * {@code "citas": [dto]} (every non-cancelled cita intersecting the slot). Error codes beyond the common
- * ones: VALIDATION on hora/fecha/estado/idMedico/idPaciente, NOT_FOUND (missing or out of scope),
- * CONFLICT (the cita left PROGRAMADA between the check and the write; reload and retry).
- * Cita DTO: id, idMedico, medicoNombre, especialidad, idPaciente, pacienteNombre,
- * pacienteDocumento, fecha (yyyy-MM-dd), hora (HH:mm), fechaHora (ISO-8601 with offset), motivo, estado,
- * horaInicioReal, horaFinReal, observaciones.
- */
 public final class CitaController implements Controller {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
@@ -108,7 +92,6 @@ public final class CitaController implements Controller {
         return toMap(citas.get(Payload.requireLong(Payload.object(payload), "id")), citas.zone());
     }
 
-    /** Creates the cita when {@code id} is missing or 0; otherwise reschedules it. */
     private Object save(String payload) {
         Map<String, Object> body = Payload.object(payload);
         Long id = Payload.optLong(body, "id");
@@ -176,7 +159,6 @@ public final class CitaController implements Controller {
         }
     }
 
-    /** Cita DTO; also used by {@link AtencionController}, whose responses embed the cita. */
     static Map<String, Object> toMap(CitaView view, AppZone zone) {
         var c = view.cita();
         LocalDate fecha = zone.dateOf(c.fechaHoraProgramada());

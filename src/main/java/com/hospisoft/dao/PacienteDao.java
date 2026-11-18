@@ -12,14 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * JDBC implementation of {@link PacienteRepository}. PreparedStatement only: the WHERE clause is
- * assembled from constant fragments and every user value travels as a parameter.
- *
- * <p>MEDICO scope ("attended"): at least one cita with the medico whose estado is not CANCELADA.
- * Dates are bound and read as {@link LocalDate} (pgjdbc maps DATE natively).
- * Constraint violations are translated like in {@link MedicoDao}.
- */
 public final class PacienteDao implements PacienteRepository {
 
     static final String COLUMNS =
@@ -52,7 +44,6 @@ public final class PacienteDao implements PacienteRepository {
             OR EXISTS (SELECT 1 FROM usuario WHERE rol = 'PACIENTE' AND id_referencia = ?)
         """;
 
-    /** Scope rule: a non-cancelled cita between the patient (p) and the medico parameter. */
     static final String ATTENDED_BY =
         "EXISTS (SELECT 1 FROM cita c WHERE c.id_paciente = p.id AND c.id_medico = ? AND c.estado <> 'CANCELADA')";
 
@@ -247,8 +238,6 @@ public final class PacienteDao implements PacienteRepository {
         });
     }
 
-    // ------------------------------------------------------------ helpers
-
     private static SQLException rethrow(SQLException ex, RuntimeException typed) throws SQLException {
         if (typed != null) {
             throw typed;
@@ -265,7 +254,6 @@ public final class PacienteDao implements PacienteRepository {
         }
     }
 
-    /** Binds the nine entity columns starting at index 1; returns the next free index. */
     private static int bindEntity(PreparedStatement ps, Paciente paciente) throws SQLException {
         ps.setString(1, paciente.documento());
         ps.setString(2, paciente.nombres());

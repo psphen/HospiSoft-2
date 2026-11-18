@@ -16,8 +16,6 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class JsApiTest {
-
-    /** The exact surface reachable from the page. Widening it is a deliberate, reviewed change. */
     private static final Set<String> ALLOWED = Set.of(
         "call", "login", "logout", "getSession", "getAllowedPages", "getStartupStatus", "navigate", "log");
 

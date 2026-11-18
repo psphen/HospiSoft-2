@@ -78,7 +78,6 @@ class AtencionServiceTest {
         medicamentos.add(new Medicamento(6L, "MED-005", "Loratadina", null, "Caja x 10", 2, 15, true));
         medicamentos.add(new Medicamento(7L, "MED-010", "Diclofenaco", null, "Tubo", 50, 10, false));
         citas = new InMemoryCitaRepository(medicos, pacientes);
-        // 1: garcia/maria PROGRAMADA, 2: garcia/juan EN_CURSO, 3: lopez/juan PROGRAMADA, 4: garcia/maria FINALIZADA
         citas.add(new Cita(1L, 10L, 20L, ZONE.at(TODAY, LocalTime.of(9, 0)), "Control", EstadoCita.PROGRAMADA, null, null, null));
         citas.add(new Cita(2L, 10L, 21L, ZONE.at(TODAY, LocalTime.of(10, 0)), "Dolor", EstadoCita.EN_CURSO,
             ZONE.at(TODAY, LocalTime.of(10, 1)), null, null));
@@ -92,8 +91,6 @@ class AtencionServiceTest {
         service = new AtencionService(atenciones, citas, medicamentos, pacientes,
             () -> Optional.ofNullable(current), CLOCK, ZONE, audit);
     }
-
-    // ------------------------------------------------------------ audit
 
     @Test
     void lifecycleIsAuditedAfterEachCommit() {
@@ -142,7 +139,7 @@ class AtencionServiceTest {
     void aRolledBackClosingIsNotAudited() {
         atenciones.failOnRecetaInsert = 0;
         assertThrows(RuntimeException.class, () -> service.finalizar(closing(2, line(5, 1, null))));
-        assertThrows(ValidationException.class, () -> service.iniciar(1)); // cita 2 still EN_CURSO
+        assertThrows(ValidationException.class, () -> service.iniciar(1));
         assertTrue(audit.entries().isEmpty(), "only committed work is audited: " + audit.entries());
     }
 
@@ -150,11 +147,8 @@ class AtencionServiceTest {
         return assertThrows(ValidationException.class, () -> service.finalizar(input));
     }
 
-    // ------------------------------------------------------------ iniciar
-
     @Test
     void iniciarMovesTheOwnProgramadaCitaToEnCurso() {
-        // cita 2 is EN_CURSO in the fixture: close it first so the medico is free
         service.finalizar(closing(2));
         CitaView started = service.iniciar(1);
         assertEquals(EstadoCita.EN_CURSO, started.cita().estado());
@@ -177,8 +171,8 @@ class AtencionServiceTest {
         service.finalizar(closing(1));
         ConflictException conflict = assertThrows(ConflictException.class, () -> service.iniciar(1));
         assertEquals(AtencionService.NOT_PROGRAMADA, conflict.userMessage());
-        assertThrows(NotFoundException.class, () -> service.iniciar(3));   // another medico's cita
-        assertThrows(NotFoundException.class, () -> service.iniciar(999)); // missing
+        assertThrows(NotFoundException.class, () -> service.iniciar(3));
+        assertThrows(NotFoundException.class, () -> service.iniciar(999));
     }
 
     @Test
@@ -191,8 +185,6 @@ class AtencionServiceTest {
         current = null;
         assertThrows(PermissionException.class, () -> service.iniciar(1));
     }
-
-    // ------------------------------------------------------------ finalizar
 
     @Test
     void happyPathWritesCitaHistoriaRecetasAndDecrementsStock() {
@@ -235,9 +227,9 @@ class AtencionServiceTest {
     @Test
     void mixedLinesDeliverOnlyWhatFits() {
         Atencion result = service.finalizar(closing(2,
-            line(5, 10, null),                 // enough stock -> delivered
-            line(6, 99, "No hay"),             // not enough -> pending
-            line(7, 1, "Medicamento inactivo"))); // inactive -> never delivered
+            line(5, 10, null),
+            line(6, 99, "No hay"),
+            line(7, 1, "Medicamento inactivo")));
         assertEquals(List.of(true, false, false),
             result.recetas().stream().map(r -> r.receta().entregado()).toList());
         assertEquals(140, medicamentos.findById(5).orElseThrow().stock());
@@ -279,15 +271,15 @@ class AtencionServiceTest {
 
     @Test
     void finalizarOnlyWorksOnOwnEnCursoCitas() {
-        assertThrows(NotFoundException.class, () -> service.finalizar(closing(3)));   // another medico
-        assertThrows(NotFoundException.class, () -> service.finalizar(closing(999))); // missing
+        assertThrows(NotFoundException.class, () -> service.finalizar(closing(3)));
+        assertThrows(NotFoundException.class, () -> service.finalizar(closing(999)));
         ConflictException notStarted = assertThrows(ConflictException.class, () -> service.finalizar(closing(1)));
         assertEquals(AtencionService.NOT_EN_CURSO, notStarted.userMessage());
     }
 
     @Test
     void everythingRollsBackWhenAWriteFailsLate() {
-        atenciones.failOnRecetaInsert = 1; // the second receta insert blows up
+        atenciones.failOnRecetaInsert = 1;
         assertThrows(IllegalStateException.class,
             () -> service.finalizar(closing(2, line(5, 9, null), line(6, 1, null))));
         assertEquals(0, atenciones.historiaCount(), "historia rolled back");
@@ -323,12 +315,9 @@ class AtencionServiceTest {
         assertEquals(Validation.REQUIRED,
             assertThrows(ValidationException.class, () -> service.finalizar(
                 new AtencionInput(null, "d", "t", null, null, List.of()))).errors().get("idCita"));
-        // index is part of the field name
         ValidationException second = invalidClose(closing(2, line(5, 1, null), line(999, 1, null)));
         assertEquals(Validation.NOT_EXISTS, second.errors().get("recetas[1].idMedicamento"));
     }
-
-    // ------------------------------------------------------------ reads
 
     @Test
     void historiaDeCitaRespectsTheScope() {
@@ -345,14 +334,14 @@ class AtencionServiceTest {
         assertThrows(NotFoundException.class, () -> service.historiaDeCita(2));
         current = ADMIN;
         assertEquals("Gripe", service.historiaDeCita(2).historia().diagnostico());
-        assertThrows(NotFoundException.class, () -> service.historiaDeCita(1)); // no historia yet
+        assertThrows(NotFoundException.class, () -> service.historiaDeCita(1));
         assertThrows(NotFoundException.class, () -> service.historiaDeCita(999));
     }
 
     @Test
     void historialPacienteScopeMatrix() {
         service.finalizar(closing(2, line(5, 1, null)));
-        pacientes.markAttended(21L, 10L); // juan is garcia's patient
+        pacientes.markAttended(21L, 10L);
 
         current = ADMIN;
         Page<HistoriaView> admin = service.historialPaciente(21, 1, 10);
@@ -396,11 +385,8 @@ class AtencionServiceTest {
         assertThrows(PermissionException.class, () -> service.medicamentosParaRecetar());
     }
 
-    // ------------------------------------------------------------ boxed ids, scope and limits
-
     @Test
     void scopeWorksForIdsAboveTheLongCache() {
-        // ids above 127 are not cached: comparing boxed Longs with == would deny access here
         medicos.add(new Medico(1010L, "9001", "Big", "Id", "Medicina General", null, null, true));
         pacientes.add(new Paciente(2020L, "9002", "Big", "Patient", LocalDate.of(1990, 1, 1), "F",
             null, null, null, true));
@@ -423,8 +409,7 @@ class AtencionServiceTest {
 
     @Test
     void medicoOnlySeesItsOwnEntriesOfASharedPatient() {
-        // garcia closes cita 2 (juan); lopez closes a cita of the same patient
-        pacientes.markAttended(21L, 10L); // juan is also garcia's patient
+        pacientes.markAttended(21L, 10L);
         service.finalizar(closing(2, line(5, 1, null)));
         citas.add(new Cita(10L, 11L, 21L, ZONE.at(TODAY, LocalTime.of(14, 0)), "Otra", EstadoCita.EN_CURSO,
             ZONE.at(TODAY, LocalTime.of(14, 1)), null, null));
@@ -475,7 +460,6 @@ class AtencionServiceTest {
         service.finalizar(closing(2));
         ConflictException closed = assertThrows(ConflictException.class, () -> service.finalizar(closing(2)));
         assertEquals("La atención ya fue finalizada", closed.userMessage());
-        // a cita that was never started reports the generic message instead
         ConflictException notStarted = assertThrows(ConflictException.class, () -> service.finalizar(closing(1)));
         assertEquals(AtencionService.NOT_EN_CURSO, notStarted.userMessage());
         citas.replace(new Cita(1L, 10L, 20L, citas.raw(1).fechaHoraProgramada(), "Control", EstadoCita.CANCELADA,
@@ -487,7 +471,6 @@ class AtencionServiceTest {
     @Test
     void aDuplicateHistoriaIsReportedAsAlreadyClosed() {
         service.finalizar(closing(2));
-        // the cita is forced back to EN_CURSO: the historia is still there and must win
         Cita cita = citas.raw(2);
         citas.replace(new Cita(cita.id(), cita.idMedico(), cita.idPaciente(), cita.fechaHoraProgramada(),
             cita.motivo(), EstadoCita.EN_CURSO, cita.horaInicioReal(), null, null));
@@ -519,7 +502,6 @@ class AtencionServiceTest {
 
     @Test
     void threeLinesOfTheSameMedicamentoWithMixedAvailability() {
-        // stock 2 of medicamento 6: 1 fits, the next 1 fits, the third does not
         Atencion result = service.finalizar(closing(2,
             line(6, 1, null), line(6, 1, null), line(6, 1, "Ya no queda")));
         assertEquals(List.of(true, true, false),

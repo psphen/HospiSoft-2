@@ -13,15 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-/**
- * External database configuration (config.properties). Never bundled, never committed.
- *
- * <p>Search order: the system property {@code hospisoft.config}; for a jpackage app-image, the
- * directory of the launcher ({@code <image>}, where the user naturally drops the file); the
- * directory of the running jar; the current working directory. The file is read as UTF-8 so
- * passwords with non-ASCII characters survive. Construction never throws: {@link #state()} reports
- * what was found so the UI can explain the problem.
- */
 public final class AppConfig {
 
     public static final String FILE_NAME = "config.properties";
@@ -58,12 +49,10 @@ public final class AppConfig {
         this.poolSize = poolSize;
     }
 
-    /** Loads using the default search order. */
     public static AppConfig load() {
         return load(defaultCandidates());
     }
 
-    /** Loads from the first existing candidate path. */
     public static AppConfig load(List<Path> candidates) {
         Path expected = candidates.isEmpty() ? Paths.get(FILE_NAME).toAbsolutePath() : candidates.get(0);
         for (Path candidate : candidates) {
@@ -74,13 +63,11 @@ public final class AppConfig {
         return new AppConfig(State.NOT_FOUND, null, expected, List.of(), null, null, null, DEFAULT_POOL_SIZE);
     }
 
-    /** Package-private for tests. */
     static AppConfig fromFile(Path file) {
         Properties props = new Properties();
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             props.load(reader);
         } catch (IOException | IllegalArgumentException ex) {
-            // IllegalArgumentException: malformed \\u escape inside the file
             return new AppConfig(State.READ_ERROR, file, file, List.of(), null, null, null, DEFAULT_POOL_SIZE);
         }
         List<String> missing = new ArrayList<>();
@@ -113,7 +100,6 @@ public final class AppConfig {
         }
     }
 
-    /** System property, jar directory, working directory (in that order, de-duplicated). */
     public static List<Path> defaultCandidates() {
         List<Path> candidates = new ArrayList<>();
         String explicit = System.getProperty(SYSTEM_PROPERTY);
@@ -122,8 +108,6 @@ public final class AppConfig {
         }
         Path jarDir = runningJarDirectory();
         if (jarDir != null) {
-            // jpackage app-image: the jar lives in <image>/app while the launcher sits in <image>,
-            // so the launcher's directory is the natural place for the file and is reported first.
             Path appImageRoot = appImageRootOf(jarDir);
             if (appImageRoot != null) {
                 addUnique(candidates, appImageRoot.resolve(FILE_NAME));
@@ -134,12 +118,6 @@ public final class AppConfig {
         return candidates;
     }
 
-    /**
-     * The directory holding the launcher of a jpackage app-image, given the directory of the jar
-     * ({@code <image>/app}); null for any other layout. A folder merely named "app" is not enough:
-     * jpackage always writes its launcher configuration as {@code app/<Name>.cfg}, so that file is
-     * the evidence this really is an image.
-     */
     static Path appImageRootOf(Path jarDir) {
         Path name = jarDir.getFileName();
         if (name == null || !"app".equals(name.toString()) || jarDir.getParent() == null) {
@@ -161,7 +139,6 @@ public final class AppConfig {
         }
     }
 
-    /** Directory of the running jar, or null when running from a classes directory (dev). */
     static Path runningJarDirectory() {
         try {
             CodeSource source = AppConfig.class.getProtectionDomain().getCodeSource();
@@ -186,12 +163,10 @@ public final class AppConfig {
         return state;
     }
 
-    /** File actually loaded (or that failed to load), null when not found. */
     public Path sourcePath() {
         return sourcePath;
     }
 
-    /** Where the file is expected (first candidate), useful for error messages. */
     public Path expectedPath() {
         return expectedPath;
     }

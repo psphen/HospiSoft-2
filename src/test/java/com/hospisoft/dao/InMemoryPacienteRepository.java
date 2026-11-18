@@ -14,15 +14,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * In-memory fake mirroring the DAO semantics (filters, ordering, paging, medico scoping).
- * Scope rule mirrored from the DAO: only non-cancelled citas count as "attended".
- */
 public final class InMemoryPacienteRepository implements PacienteRepository {
 
     private final Map<Long, Paciente> rows = new LinkedHashMap<>();
     private final Set<Long> withHistory = new HashSet<>();
-    /** paciente id -> medico ids with at least one non-cancelled cita. */
     private final Map<Long, Set<Long>> attendedBy = new HashMap<>();
     private final Set<Long> failDeleteWithHistory = new HashSet<>();
     private long nextId = 1;
@@ -39,12 +34,10 @@ public final class InMemoryPacienteRepository implements PacienteRepository {
         withHistory.add(id);
     }
 
-    /** A non-cancelled cita between the patient and the medico. */
     public void markAttended(long idPaciente, long idMedico) {
         markCita(idPaciente, idMedico, false);
     }
 
-    /** A cita that counts as history but, when cancelled, grants no scope. */
     public void markCita(long idPaciente, long idMedico, boolean cancelada) {
         withHistory.add(idPaciente);
         if (!cancelada) {
@@ -52,7 +45,6 @@ public final class InMemoryPacienteRepository implements PacienteRepository {
         }
     }
 
-    /** Simulates a FOREIGN KEY violation on the next physical delete of the row. */
     public void failDeleteWithHistory(long id) {
         failDeleteWithHistory.add(id);
     }

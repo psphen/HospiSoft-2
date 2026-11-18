@@ -12,21 +12,6 @@ import com.hospisoft.service.MedicoService;
 import java.util.List;
 import java.util.Map;
 
-/**
- * MVC controller of the medico module: receives the View's request from the JS bridge, parses
- * the payload, delegates to {@link MedicoService} (the Model) and returns the DTO.
- *
- * <p>Payloads:
- * <ul>
- *   <li>listMedicos: {@code {"filter":{"especialidad","activo","texto"},"page":1,"pageSize":10}} ->
- *       {@code {"items":[dto],"total":N,"page":P,"pageSize":S,"totalPages":T}}</li>
- *   <li>getMedico / deleteMedico: {@code {"id":5}} -> dto / {@code {"outcome":"DELETED|DEACTIVATED"}}</li>
- *   <li>saveMedico: the dto (insert when id is missing or 0; {@code activo} optional: true on insert,
- *       unchanged on update when omitted) -> the stored dto</li>
- *   <li>listEspecialidades: ignored -> {@code ["..."]}</li>
- *   <li>exportMedicos: {@code {"filter":{...as listMedicos...},"format":"xlsx|pdf"}} -> see {@link Exports}</li>
- * </ul>
- */
 public final class MedicoController implements Controller {
 
     static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.MEDICO, "medicos", "Listado de Médicos",
@@ -76,7 +61,6 @@ public final class MedicoController implements Controller {
         return Map.of("outcome", medicos.delete(Payload.requireLong(Payload.object(payload), "id")));
     }
 
-    /** The payload is ignored. */
     private Object especialidades(String payload) {
         return medicos.especialidades();
     }

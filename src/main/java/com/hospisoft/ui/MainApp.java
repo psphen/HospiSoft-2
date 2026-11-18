@@ -54,7 +54,6 @@ import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import netscape.javascript.JSObject;
 
-/** Composition root: wires config, database, services, the MVC controllers, the JS bridge and the WebView. */
 public class MainApp extends Application {
 
     private static final String TITLE = "HospiSoft";
@@ -64,7 +63,6 @@ public class MainApp extends Application {
     private static final double MIN_HEIGHT = 700;
     private static final String LOAD_ERROR_MESSAGE = "No se pudo cargar la página";
 
-    /** Forwards console output, uncaught errors and unhandled rejections to Bridge.log. */
     private static final String CONSOLE_SHIM = """
         (function () {
           var app = window.app;
@@ -92,7 +90,6 @@ public class MainApp extends Application {
         })();
         """;
 
-    // Strong references: the JS-side "app" object is a weak wrapper around this instance.
     private Bridge bridge;
     private JsApi jsApi;
     private ConnectionPool pool;
@@ -148,11 +145,9 @@ public class MainApp extends Application {
         router = new PageRouter(engine, sessions);
         java.time.Clock clock = java.time.Clock.systemDefaultZone();
         AppZone appZone = AppZone.systemDefault();
-        // one audit trail shared by every use case; best-effort, so a failing write never breaks an operation
         AuditoriaService auditoria = new AuditoriaService(auditoriaRepository, sessions::current, appZone);
         bridge = new Bridge(new AuthService(usuarios, auditoria), sessions, startupProbe, router,
             this::runScriptLater, auditoria);
-        // list exports: the save dialog is owned by the main window and shown on the FX thread
         ExportService exports = new ExportService(new FxFileSaver(() -> stage), auditoria, sessions::current,
             clock, appZone);
         List<Controller> controllers = List.of(
@@ -167,7 +162,7 @@ public class MainApp extends Application {
                 clock, appZone)),
             new AuditoriaController(auditoria, exports));
         controllers.forEach(controller -> controller.register(bridge));
-        jsApi = new JsApi(bridge); // only the facade is reachable from JavaScript
+        jsApi = new JsApi(bridge);
 
         engine.setOnAlert(event -> System.out.println("[web alert] " + Bridge.sanitizeLog(event.getData())));
         engine.setOnError(event -> System.err.println("[web error] " + event.getMessage()));
@@ -181,7 +176,7 @@ public class MainApp extends Application {
         stage.setScene(scene);
         stage.show();
 
-        router.load(AuthGuard.HOME_PAGE); // guard sends the user to login.html when there is no session
+        router.load(AuthGuard.HOME_PAGE);
     }
 
     private void onLoadState(Worker.State state) {
@@ -195,7 +190,6 @@ public class MainApp extends Application {
         }
     }
 
-    /** Re-injected on every page load: the document (and its window object) is new each time. */
     private void injectBridge() {
         try {
             JSObject window = (JSObject) engine.executeScript("window");
@@ -218,16 +212,15 @@ public class MainApp extends Application {
         }
     }
 
-    /** A page failed to load: fall back to the login page with an inline message. */
     private void onLoadFailed() {
         String location = engine.getLocation();
         Throwable cause = engine.getLoadWorker().getException();
         System.err.println("[web] load failed: " + AuthGuard.pageNameOf(location) + " " + cause);
         if (AuthGuard.LOGIN_PAGE.equals(AuthGuard.pageNameOf(location))) {
-            return; // the fallback itself failed: nothing further to try
+            return;
         }
         pendingLoadError = LOAD_ERROR_MESSAGE;
-        sessions.clear(); // a broken page must not keep a half-initialized session alive
+        sessions.clear();
         router.load(AuthGuard.LOGIN_PAGE);
     }
 
@@ -235,7 +228,6 @@ public class MainApp extends Application {
         runScript("window.dispatchEvent(new Event('startup-status'));");
     }
 
-    /** Bridge.ScriptSink: marshals a script onto the JavaFX thread. */
     private void runScriptLater(String script) {
         Platform.runLater(() -> runScript(script));
     }

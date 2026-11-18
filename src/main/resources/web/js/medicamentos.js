@@ -1,7 +1,3 @@
-/*
- * Medicamentos page: list with filters and pagination, create/edit modal, delete modal.
- * MEDICO and PACIENTE get a read-only view (cosmetic; the Java service enforces it).
- */
 (function () {
   'use strict';
 
@@ -39,7 +35,6 @@
   var pendingDeleteId = null;
   var readOnly = false;
   var rol = null;
-  /* Stock value loaded into the edit form; sent back as stockExpected (optimistic concurrency). */
   var stockExpected = null;
 
   function currentFilter() {
@@ -57,7 +52,7 @@
     window.HospiSoft.appCall('listMedicamentos', { filter: currentFilter(), page: page, pageSize: crud.PAGE_SIZE })
       .then(function (response) {
         if (!crud.isCurrent('list', token)) {
-          return; // a newer request already answered
+          return;
         }
         if (!response.ok) {
           body.innerHTML = crud.emptyRow(COLUMNS, response.message);
@@ -120,8 +115,6 @@
       + '</tr>';
   }
 
-  /* ---------------------------------------------------------------- modal form */
-
   function fillForm(m) {
     document.getElementById('medicamento-id').value = m ? m.id : '';
     document.getElementById('medicamento-codigo').value = m ? m.codigo : '';
@@ -138,7 +131,6 @@
     crud.hideModalAlert(modalAlert);
   }
 
-  /* Numbers are sent as typed: Java reports non-integral or negative values as field errors. */
   function numberOrRaw(value) {
     var text = value.trim();
     if (text === '') {
@@ -175,7 +167,7 @@
   function openEdit(id) {
     fillForm(null);
     title.textContent = 'Editar Medicamento';
-    saveButton.disabled = true; // never allow saving an "edit" form that has no id yet
+    saveButton.disabled = true;
     window.HospiSoft.appCall('getMedicamento', { id: id }).then(function (response) {
       if (!response.ok) {
         abandonEdit(response.message);
@@ -218,7 +210,6 @@
       });
   }
 
-  /* The row changed since the form was opened: refill it from the server (new stockExpected) and let the user retry. */
   function reloadAfterConflict(id, message) {
     saveButton.disabled = true;
     window.HospiSoft.appCall('getMedicamento', { id: id }).then(function (response) {
@@ -263,15 +254,12 @@
       document.getElementById('btn-add').style.display = 'none';
     }
     if (rol === 'PACIENTE') {
-      /* patients see their own orders instead of the stock table */
       document.getElementById('page-title').textContent = 'Mis órdenes de medicamentos';
       document.getElementById('filters-bar').classList.add('d-none');
       document.getElementById('stock-card').classList.add('d-none');
       document.getElementById('ordenes-card').classList.remove('d-none');
     }
   }
-
-  /* ---------------------------------------------------------------- patient orders */
 
   function loadOrdenes(page) {
     var body = document.getElementById('ordenes-body');
@@ -320,8 +308,6 @@
       });
   }
 
-  /* ---------------------------------------------------------------- events */
-
   function bind() {
     document.getElementById('btn-filter').addEventListener('click', function () { load(1); });
     searchInput.addEventListener('keydown', function (event) {
@@ -344,7 +330,6 @@
       }
     });
     saveButton.addEventListener('click', save);
-    /* Enter inside the form saves only while Guardar is enabled (the "disabled until loaded" guard holds). */
     form.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
         event.preventDefault();
@@ -365,7 +350,6 @@
     if (rol === 'PACIENTE') {
       loadOrdenes(1);
     } else {
-      /* patients see their orders, not the inventory list, so only the other roles export it */
       crud.bindExport({ method: 'exportMedicamentos', filter: currentFilter });
       load(1);
     }

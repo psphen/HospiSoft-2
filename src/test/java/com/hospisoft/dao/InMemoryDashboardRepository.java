@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/** In-memory fake computing the same aggregates from the other in-memory repositories. */
 public final class InMemoryDashboardRepository implements DashboardRepository {
 
     private final InMemoryCitaRepository citas;

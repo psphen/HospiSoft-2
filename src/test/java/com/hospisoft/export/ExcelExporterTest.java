@@ -17,7 +17,6 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 
-/** Opens the generated workbook with POI and checks layout, styles and cell types. */
 class ExcelExporterTest {
 
     private static XSSFWorkbook open(byte[] bytes) throws IOException {

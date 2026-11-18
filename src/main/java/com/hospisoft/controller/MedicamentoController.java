@@ -17,17 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * MVC controller of the medicamento module: receives the View's request from the JS bridge,
- * parses the payload, delegates to {@link MedicamentoService} (the Model) and returns the DTO.
- *
- * <p>Same payload pattern as the medico/paciente modules: list
- * {@code {"filter":{"texto","activo","stockState"},"page","pageSize"}}, get/delete {@code {"id"}},
- * save = dto ({@code activo} optional; on update {@code stockExpected} = the stock loaded into the
- * form, else VALIDATION on stock; a changed stock answers CONFLICT). DTO adds the derived
- * {@code stockState}. exportMedicamentos takes the list filter plus {@code "format":"xlsx|pdf"}
- * (see {@link Exports}).
- */
 public final class MedicamentoController implements Controller {
 
     static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.MEDICAMENTO, "medicamentos",

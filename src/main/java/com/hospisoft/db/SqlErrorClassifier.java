@@ -2,15 +2,11 @@ package com.hospisoft.db;
 
 import java.sql.SQLException;
 
-/** Pure classification of JDBC failures by SQLState (PostgreSQL error classes). */
 public final class SqlErrorClassifier {
 
     public enum Kind {
-        /** Class 08 (connection exception) or 57P0x (server shutdown / crash): reconnect later. */
         UNAVAILABLE,
-        /** 28000 / 28P01: wrong user or password in config.properties. */
         AUTH,
-        /** Anything else: a bug or a data problem, not a connectivity problem. */
         OTHER
     }
 
@@ -33,7 +29,6 @@ public final class SqlErrorClassifier {
         return Kind.OTHER;
     }
 
-    /** Walks the cause chain: the first classified state wins; a null-state connect failure is UNAVAILABLE. */
     public static Kind classify(SQLException ex) {
         Throwable current = ex;
         boolean sawNullState = false;

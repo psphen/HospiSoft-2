@@ -28,7 +28,7 @@ class SqlErrorClassifierTest {
     void everythingElseIsOther() {
         assertEquals(Kind.OTHER, SqlErrorClassifier.classify("42P01"));
         assertEquals(Kind.OTHER, SqlErrorClassifier.classify("23505"));
-        assertEquals(Kind.OTHER, SqlErrorClassifier.classify("57014")); // query canceled, not a crash
+        assertEquals(Kind.OTHER, SqlErrorClassifier.classify("57014"));
         assertEquals(Kind.OTHER, SqlErrorClassifier.classify((String) null));
         assertEquals(Kind.OTHER, SqlErrorClassifier.classify(""));
     }

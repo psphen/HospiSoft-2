@@ -34,7 +34,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** End-to-end medico methods through the async bridge with the in-memory repository (no database). */
 class MedicoControllerTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
@@ -42,7 +41,6 @@ class MedicoControllerTest {
     private static final SessionContext PACIENTE = new SessionContext(3, "paciente1", Rol.PACIENTE, 20L, "Maria");
     private static final UsuarioRepository NO_USERS = username -> Optional.empty();
 
-    /** Delivers resolved envelopes to the test thread. */
     static final class QueueSink implements Bridge.ScriptSink {
         final BlockingQueue<String> scripts = new ArrayBlockingQueue<>(16);
 
@@ -86,7 +84,6 @@ class MedicoControllerTest {
         bridge.shutdown();
     }
 
-    /** Calls an async method and waits for its envelope. */
     private Map<String, Object> invoke(String method, String payload) throws InterruptedException {
         String requestId = "req" + (++sequence);
         Map<String, Object> ack = Json.parseObject(bridge.call(requestId, method, payload));
@@ -136,7 +133,7 @@ class MedicoControllerTest {
 
         Map<String, Object> filtered = data(invoke("listMedicos",
             "{\"filter\":{\"especialidad\":\"Pediatria\",\"activo\":true,\"texto\":\"apellido1\"},\"page\":1,\"pageSize\":5}"));
-        assertEquals(1L, filtered.get("total")); // 10 is Pediatria+active and matches "apellido1"; 12 is inactive
+        assertEquals(1L, filtered.get("total"));
         assertEquals("Apellido10", items(filtered).get(0).get("apellidos"));
 
         assertEquals("BAD_REQUEST", invoke("listMedicos", "{\"page\":0}").get("code"));
@@ -169,7 +166,6 @@ class MedicoControllerTest {
         assertEquals(false, updated.get("activo"));
         assertEquals("Eva Maria", medicos.findById(id).orElseThrow().nombres());
 
-        // activo omitted on update: the stored value (false) is kept
         Map<String, Object> kept = data(invoke("saveMedico",
             "{\"id\":" + id + ",\"documento\":\"7001\",\"nombres\":\"Eva\",\"apellidos\":\"Mora\",\"especialidad\":\"Dermatologia\"}"));
         assertEquals(false, kept.get("activo"));
@@ -256,8 +252,6 @@ class MedicoControllerTest {
         assertEquals(0, items(beyond).size());
         assertEquals(12L, beyond.get("total"));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportWritesEveryMatchingMedicoNotJustOnePage() throws Exception {

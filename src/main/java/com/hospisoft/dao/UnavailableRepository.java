@@ -3,10 +3,6 @@ package com.hospisoft.dao;
 import com.hospisoft.db.DatabaseUnavailableException;
 import java.lang.reflect.Proxy;
 
-/**
- * Stand-in used when config.properties is missing or unusable: every repository method throws
- * {@link DatabaseUnavailableException}, so the UI shows the DB banner instead of crashing.
- */
 public final class UnavailableRepository {
 
     private UnavailableRepository() {

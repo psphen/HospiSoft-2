@@ -4,7 +4,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** Collects field errors (Spanish messages) and offers the common checks used by the services. */
 public final class Validation {
 
     static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$");
@@ -20,16 +19,13 @@ public final class Validation {
     public static final String NOT_EXISTS = "No existe";
     public static final String MUST_BE_ACTIVE = "Debe estar activo";
 
-    /** Duplicate-key message for a unique field. */
     public static String duplicateMessage(String field) {
         return "codigo".equals(field) ? DUPLICATE_CODIGO : DUPLICATE_DOCUMENTO;
     }
-    /** Longest free-text filter accepted by the list use cases. */
     public static final int MAX_FILTER_TEXT = 100;
 
     private final Map<String, String> errors = new LinkedHashMap<>();
 
-    /** Trims; null for blank. */
     static String clean(String value) {
         if (value == null) {
             return null;
@@ -42,7 +38,6 @@ public final class Validation {
         return "Máximo " + max + " caracteres";
     }
 
-    /** @throws ValidationException on field {@code texto} when the free-text filter is too long */
     static void checkFilterText(String texto) {
         if (texto != null && texto.length() > MAX_FILTER_TEXT) {
             throw new ValidationException(Map.of("texto", maxLengthMessage(MAX_FILTER_TEXT)));
@@ -61,10 +56,6 @@ public final class Validation {
         }
     }
 
-    /**
-     * Like {@link #nonNegativeInt} but bounded: any value outside [{@code min}, {@code max}] -
-     * negative ones included - reports {@code rangeMessage}. Returns {@code min} when invalid.
-     */
     int intInRange(String field, Object raw, int min, int max, String rangeMessage) {
         if (raw == null || (raw instanceof String s && s.isBlank())) {
             reject(field, REQUIRED);
@@ -78,17 +69,12 @@ public final class Validation {
             return min;
         }
         if (error != null || value < min || value > max) {
-            // NEGATIVE and TOO_LARGE both mean "outside the accepted range" here
             reject(field, rangeMessage);
             return min;
         }
         return value;
     }
 
-    /**
-     * Reads a raw JSON value (an integral Number, a numeric String or null) as a non-negative int,
-     * recording REQUIRED / NOT_AN_INTEGER / NEGATIVE / TOO_LARGE on the field. Returns 0 when invalid.
-     */
     int nonNegativeInt(String field, Object raw) {
         if (raw == null || (raw instanceof String s && s.isBlank())) {
             reject(field, REQUIRED);
@@ -115,12 +101,10 @@ public final class Validation {
             try {
                 value = Long.parseLong(s.trim());
             } catch (NumberFormatException ex) {
-                // beyond long range but still digits: report the bound, not "not an integer"
                 reject(field, s.trim().matches("-?\\d+") && !s.trim().startsWith("-") ? TOO_LARGE : NOT_AN_INTEGER);
                 return 0;
             }
         } else {
-            // the JSON parser only produces Long and Double; anything else is a programming error
             reject(field, NOT_AN_INTEGER);
             return 0;
         }
@@ -153,7 +137,6 @@ public final class Validation {
         return errors;
     }
 
-    /** @throws ValidationException when at least one error was recorded */
     void throwIfInvalid() {
         if (hasErrors()) {
             throw new ValidationException(errors);

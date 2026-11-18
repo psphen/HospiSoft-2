@@ -2,7 +2,6 @@ package com.hospisoft.export;
 
 import java.util.List;
 
-/** A small table shared by the exporter tests: accents, ñ, a formula-looking value and a null cell. */
 final class ExportTestData {
 
     static final String TITLE = "Listado de Pacientes";

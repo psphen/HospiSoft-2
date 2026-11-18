@@ -20,19 +20,13 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * In-memory fake of {@link CitaRepository}. Joins names from the medico/paciente fakes; the
- * transaction scope applies operations directly (no rollback needed: checks run before writes).
- */
 public final class InMemoryCitaRepository implements CitaRepository {
 
     private final Map<Long, Cita> rows = new LinkedHashMap<>();
     private final MedicoRepository medicos;
     private final PacienteRepository pacientes;
     private long nextId = 1;
-    /** Lock calls in order, as "medico:ID" / "paciente:ID". */
     public final List<String> locks = new ArrayList<>();
-    /** Optional lock results (key "medico:ID" / "paciente:ID") simulating a row changed by another session. */
     public final Map<String, Optional<Boolean>> lockOverrides = new java.util.HashMap<>();
 
     public InMemoryCitaRepository(MedicoRepository medicos, PacienteRepository pacientes) {
@@ -53,18 +47,15 @@ public final class InMemoryCitaRepository implements CitaRepository {
         return rows.get(id);
     }
 
-    /** Every row, for transaction snapshots in tests. */
     public List<Cita> snapshot() {
         return new ArrayList<>(rows.values());
     }
 
-    /** Restores a snapshot (rollback simulation). */
     public void restore(List<Cita> snapshot) {
         rows.clear();
         snapshot.forEach(c -> rows.put(c.id(), c));
     }
 
-    /** Overwrites a row without any state guard. */
     public void replace(Cita cita) {
         rows.put(cita.id(), cita);
     }
@@ -80,7 +71,6 @@ public final class InMemoryCitaRepository implements CitaRepository {
         return c.fechaHoraProgramada().isBefore(end) && cEnd.isAfter(start);
     }
 
-    /** True while a transaction body runs (lets tests prove side effects happen after the commit). */
     public boolean transactionOpen() {
         return transactionOpen;
     }
@@ -186,7 +176,6 @@ public final class InMemoryCitaRepository implements CitaRepository {
 
     private java.util.function.BooleanSupplier failReadsWhen = () -> false;
 
-    /** Makes findById throw while {@code condition} holds, e.g. once a write has been committed. */
     public void failReadsWhen(java.util.function.BooleanSupplier condition) {
         this.failReadsWhen = condition;
     }

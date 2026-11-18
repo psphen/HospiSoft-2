@@ -2,11 +2,6 @@ package com.hospisoft.model;
 
 import java.util.List;
 
-/**
- * One page of a paginated query result. {@code page} is 1-based.
- *
- * @param total number of rows matching the filter across all pages
- */
 public record Page<T>(List<T> items, long total, int page, int pageSize) {
 
     public Page {

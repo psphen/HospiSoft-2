@@ -32,11 +32,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Render, ask where to save, write, audit: with a fake dialog and a temporary folder. */
 class ExportServiceTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
-    /** 2026-11-04 10:00 in Bogota (UTC-5). */
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-04T15:00:00Z"), ZoneOffset.UTC);
     private static final AppZone ZONE = new AppZone(ZoneId.of("America/Bogota"));
     private static final ExportSpec SPEC = new ExportSpec(ModuloAuditoria.PACIENTE, "pacientes", "Listado de Pacientes",
@@ -161,7 +159,7 @@ class ExportServiceTest {
     @Test
     void aWriteFailureIsACleanErrorWithoutAudit() throws IOException {
         Path folder = Files.createDirectory(dir.resolve("carpeta.xlsx"));
-        Files.writeString(folder.resolve("dentro.txt"), "x"); // a non-empty folder cannot be replaced by a file
+        Files.writeString(folder.resolve("dentro.txt"), "x");
         saver.answer(folder);
         ExportFailedException ex = assertThrows(ExportFailedException.class,
             () -> service.export(SPEC, ExportFormat.XLSX, rows(1, 1)));

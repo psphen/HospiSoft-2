@@ -17,11 +17,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-/**
- * JDBC implementation of {@link CitaRepository}. Rows are joined with medico and paciente for
- * display. Timestamps are bound and read as {@link OffsetDateTime} (TIMESTAMPTZ). The overlap
- * checks use the slot length {@link CitaService#SLOT_MINUTES} passed as a parameter.
- */
 public final class CitaDao implements CitaRepository {
 
     static final String COLUMNS = """
@@ -60,14 +55,12 @@ public final class CitaDao implements CitaRepository {
 
     static final String EXISTS_BY_ID = "SELECT EXISTS (SELECT 1 FROM cita WHERE id = ?)";
 
-    /** NO KEY UPDATE: blocks concurrent schedulers on the same row without blocking FK key-share locks. */
     static final String LOCK_MEDICO = "SELECT activo FROM medico WHERE id = ? FOR NO KEY UPDATE";
 
     static final String LOCK_PACIENTE = "SELECT activo FROM paciente WHERE id = ? FOR NO KEY UPDATE";
 
     static final java.util.Map<String, String> FK_FIELDS = java.util.Map.of("id_medico", "idMedico", "id_paciente", "idPaciente");
 
-    /** Intersection of [fecha, fecha + slot) with [?, ?): existing.start < newEnd AND existing.end > newStart. */
     static final String OVERLAP_MEDICO = """
         SELECT EXISTS (SELECT 1 FROM cita
             WHERE id_medico = ? AND estado <> 'CANCELADA' AND id <> ?
@@ -204,8 +197,6 @@ public final class CitaDao implements CitaRepository {
         });
     }
 
-    // ------------------------------------------------------------ transaction scope
-
     private static final class Tx implements CitaTx {
         private final Connection connection;
 
@@ -300,10 +291,6 @@ public final class CitaDao implements CitaRepository {
         }
     }
 
-    /**
-     * The CitaTx interface has no checked exceptions; the pool's {@code inTransaction} classifies
-     * SQLExceptions, so they are rethrown unchanged through this generic trick.
-     */
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> RuntimeException sneaky(Throwable ex) throws E {
         throw (E) ex;

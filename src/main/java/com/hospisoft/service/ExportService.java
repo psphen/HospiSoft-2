@@ -20,15 +20,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/**
- * Turns already permission-checked rows (see {@link ExportRows}) into a file: renders the
- * workbook or PDF, asks the user where to save it, writes it and records EXPORTAR in the audit log.
- *
- * <p>Rendering happens before the dialog, so a failure never leaves a half-written file. The file
- * is written to a temporary sibling and then moved over the target, so an existing file is either
- * fully replaced or left untouched. Cancelling the dialog is a normal outcome, not an error, and
- * is not audited (nothing left the application).
- */
 public final class ExportService {
 
     private static final DateTimeFormatter GENERATED_AT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -48,7 +39,6 @@ public final class ExportService {
         this(saver, audit, session, clock, zone, System.err::println);
     }
 
-    /** @param errorLog receives one line per failed export (class names only, never paths or data) */
     public ExportService(FileSaver saver, AuditLog audit, Supplier<Optional<SessionContext>> session, Clock clock,
                          AppZone zone, Consumer<String> errorLog) {
         this.saver = saver;
@@ -59,10 +49,6 @@ public final class ExportService {
         this.errorLog = errorLog;
     }
 
-    /**
-     * @param rows display-ready cells, one list per record, in the order of {@code spec.headers()}
-     * @throws ExportFailedException when the file cannot be generated or written
-     */
     public ExportResult export(ExportSpec spec, ExportFormat format, ExportRows<List<String>> rows) {
         ZonedDateTime now = ZonedDateTime.now(clock.withZone(zone.zone()));
         TableExport table = new TableExport(spec.title(), subtitle(now, rows), spec.headers(), rows.items(),
@@ -98,7 +84,6 @@ public final class ExportService {
         }).filter(name -> name != null).orElse(UNKNOWN_USER);
     }
 
-    /** Audit text, e.g. "Exportación PDF - 37 registro(s)" or "Exportación Excel - 5000 de 7123 registro(s)". */
     private static String detalle(ExportFormat format, ExportRows<?> rows) {
         String count = rows.truncated()
             ? rows.items().size() + " de " + rows.total()
@@ -121,7 +106,6 @@ public final class ExportService {
         return fixed.equals(name) ? chosen : chosen.resolveSibling(fixed);
     }
 
-    /** Temporary sibling first, then a move over the target: the target is never left half-written. */
     private void write(Path target, byte[] bytes) {
         Path temp = null;
         try {
@@ -149,16 +133,12 @@ public final class ExportService {
         }
         try {
             Files.deleteIfExists(temp);
-        } catch (IOException ignored) {
-            // best effort: a leftover hidden .tmp file is harmless
-        }
+        } catch (IOException ignored) {}
     }
 
     private void log(String what, Throwable ex) {
         try {
             errorLog.accept("[export] " + what + ": " + AuditoriaService.describe(ex));
-        } catch (RuntimeException ignored) {
-            // logging must never mask the real outcome
-        }
+        } catch (RuntimeException ignored) {}
     }
 }

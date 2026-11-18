@@ -32,13 +32,11 @@ class MedicamentoServiceTest {
     private RecordingAuditLog audit;
     private MedicamentoService service;
 
-    /** Insert input (no stockExpected). */
     private static MedicamentoInput input(String codigo, String nombre, String presentacion, Object stock,
                                           Object minimo) {
         return new MedicamentoInput(null, codigo, nombre, null, presentacion, stock, minimo, null);
     }
 
-    /** Update input carrying the stock the client loaded. */
     private static MedicamentoInput update(long id, String codigo, String nombre, String presentacion, Object stock,
                                            Object minimo, Long stockExpected) {
         return new MedicamentoInput(id, codigo, nombre, null, presentacion, stock, minimo, stockExpected);
@@ -117,14 +115,12 @@ class MedicamentoServiceTest {
 
     @Test
     void staleStockIsAConflict() {
-        // another session (phase 5 dispensing) changed the stock after the form was loaded
         repository.update(new Medicamento(1L, "MED-001", "Acetaminofen", "Analgesico", "Caja x 20", 140, 30, true), 150);
         ConflictException ex = assertThrows(ConflictException.class,
             () -> service.save(update(1, "MED-001", "Acetaminofen", "Caja x 20", 150L, 30L, 150L), null));
         assertEquals(ConflictException.MESSAGE, "El registro cambió desde que lo abrió. Recargue e intente de nuevo.");
         assertTrue(ex.getMessage().contains("stock"));
         assertEquals(140, repository.findById(1).orElseThrow().stock());
-        // after reloading, the fresh expected value goes through
         Medicamento saved = service.save(update(1, "MED-001", "Acetaminofen", "Caja x 20", 160L, 30L, 140L), null);
         assertEquals(160, saved.stock());
     }
@@ -188,14 +184,13 @@ class MedicamentoServiceTest {
         ValidationException ex = assertThrows(ValidationException.class,
             () -> service.save(input("MED-001", "Otro", "P", 1L, 1L), null));
         assertEquals(Validation.DUPLICATE_CODIGO, ex.errors().get("codigo"));
-        service.save(update(1, "MED-001", "Acetaminofen", "Caja x 20", 150L, 30L, 150L), null); // self
+        service.save(update(1, "MED-001", "Acetaminofen", "Caja x 20", 150L, 30L, 150L), null);
         assertThrows(ValidationException.class,
             () -> service.save(update(1, "MED-002", "Acetaminofen", "Caja x 20", 150L, 30L, 150L), null));
     }
 
     @Test
     void duplicateCodigoRaceFromTheDatabaseIsAValidationError() {
-        // the pre-check passes (no such codigo yet) but the DAO reports 23505 on insert
         MedicamentoRepository racing = new InMemoryMedicamentoRepository() {
             @Override
             public long insert(Medicamento m) {
@@ -208,8 +203,6 @@ class MedicamentoServiceTest {
         assertEquals(Validation.DUPLICATE_CODIGO, ex.errors().get("codigo"));
         assertTrue(audit.entries().isEmpty(), "a failed insert is not audited");
     }
-
-    // ------------------------------------------------------------ audit
 
     @Test
     void saveIsAuditedAsCrearOrEditarWithTheStock() {
@@ -262,12 +255,10 @@ class MedicamentoServiceTest {
 
     @Test
     void hooksForLaterPhases() {
-        assertEquals(2, repository.countLowStock()); // MED-002 (25<=30) and MED-005 (0); MED-010 is inactive
+        assertEquals(2, repository.countLowStock());
         assertEquals(List.of("Acetaminofen", "Ibuprofeno", "Loratadina"),
             repository.findAllActive().stream().map(Medicamento::nombre).toList());
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportUsesTheSameFilterAsTheListForEveryRole() {

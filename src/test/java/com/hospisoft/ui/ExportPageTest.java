@@ -13,11 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/** Static checks of the "Exportar" dropdown on every list page and of its shared JS helper. */
 class ExportPageTest {
 
     private static final Path WEB = Paths.get("src", "main", "resources", "web");
-    /** page -> [script, bridge method] */
     private static final Map<String, String[]> PAGES = Map.of(
         "pacientes.html", new String[] {"js/pacientes.js", "exportPacientes"},
         "medicos.html", new String[] {"js/medicos.js", "exportMedicos"},
@@ -29,7 +27,6 @@ class ExportPageTest {
         return Files.readString(WEB.resolve(file), StandardCharsets.UTF_8).replace("\r\n", "\n");
     }
 
-    /** The markup of the export dropdown (from its wrapper to the end of its menu). */
     private static String menu(String html, String page) {
         Matcher m = Pattern.compile("<div class=\"dropdown d-none\" id=\"export-menu\">(.*?)</ul>\\s*</div>",
             Pattern.DOTALL).matcher(html);

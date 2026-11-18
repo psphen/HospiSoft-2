@@ -20,11 +20,6 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-/**
- * The audit table in db/schema.sql must stay in sync with the Java enums and keep its append-only
- * guarantees: no foreign keys, row and statement triggers that reject UPDATE, DELETE and TRUNCATE,
- * row level security enabled like every other table.
- */
 class AuditoriaSchemaTest {
 
     private static final Pattern TABLE = Pattern.compile(
@@ -42,7 +37,6 @@ class AuditoriaSchemaTest {
         table = matcher.group(1);
     }
 
-    /** Values listed in the {@code CHECK (column IN (...))} of the given column. */
     private static Set<String> checkValues(String column) {
         Matcher check = Pattern.compile("CHECK \\(" + column + " IN \\(([^)]*)\\)\\)").matcher(table);
         assertTrue(check.find(), "no CHECK list for auditoria." + column);
@@ -63,11 +57,6 @@ class AuditoriaSchemaTest {
         return values;
     }
 
-    /**
-     * Values of the named constraint auditoria_{column}_check, which schema.sql drops and re-adds
-     * after the CREATE TABLE so that re-running the file also widens the list on an existing table
-     * (PostgreSQL gives an inline column CHECK that same default name).
-     */
     private static Set<String> namedCheckValues(String column) {
         String name = "auditoria_" + column + "_check";
         String drop = "ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS " + name + ";";

@@ -1,6 +1,5 @@
 package com.hospisoft.model;
 
-/** Row of table medico. */
 public record Medico(
     Long id,
     String documento,

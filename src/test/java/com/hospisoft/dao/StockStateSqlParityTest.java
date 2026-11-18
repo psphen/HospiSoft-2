@@ -9,15 +9,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/**
- * The three SQL fragments used by the list filter must classify exactly like {@link StockState#of}.
- * A tiny evaluator interprets the fragments literally, so changing a comparison breaks this test.
- */
 class StockStateSqlParityTest {
 
     private static final Pattern COMPARISON = Pattern.compile("^(stock|stock_minimo)\\s*(=|<=|>=|<|>)\\s*(stock|stock_minimo|-?\\d+)$");
 
-    /** Evaluates "a OP b [AND c OP d ...]" where operands are column names or integer literals. */
     static boolean evaluate(String fragment, int stock, int stockMinimo) {
         boolean result = true;
         for (String term : fragment.split("\\s+AND\\s+")) {

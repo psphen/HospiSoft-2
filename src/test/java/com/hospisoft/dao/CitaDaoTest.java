@@ -107,11 +107,11 @@ class CitaDaoTest {
 
     @Test
     void transactionLocksChecksAndInserts() {
-        jdbc.rows(FakeJdbc.row("activo", true))       // lock medico
-            .rows(FakeJdbc.row("activo", false))      // lock paciente (inactive, reported to the caller)
-            .rows(FakeJdbc.row("exists", false))      // medico overlap
-            .rows(FakeJdbc.row("exists", false))      // paciente overlap
-            .rows(FakeJdbc.row("id", 99L));           // insert
+        jdbc.rows(FakeJdbc.row("activo", true))
+            .rows(FakeJdbc.row("activo", false))
+            .rows(FakeJdbc.row("exists", false))
+            .rows(FakeJdbc.row("exists", false))
+            .rows(FakeJdbc.row("id", 99L));
         Cita cita = new Cita(null, 10L, 20L, T0, "Control", EstadoCita.PROGRAMADA, null, null, null);
         long id = dao.inTransaction(tx -> {
             assertEquals(java.util.Optional.of(true), tx.lockMedico(10));

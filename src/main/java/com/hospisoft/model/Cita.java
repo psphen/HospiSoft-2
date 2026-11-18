@@ -2,7 +2,6 @@ package com.hospisoft.model;
 
 import java.time.OffsetDateTime;
 
-/** Row of table cita. */
 public record Cita(
     Long id,
     Long idMedico,

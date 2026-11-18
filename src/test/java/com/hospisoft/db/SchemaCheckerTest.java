@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** The table list is pinned here; AuditoriaSchemaTest checks db/schema.sql creates exactly these tables. */
 class SchemaCheckerTest {
 
     @Test

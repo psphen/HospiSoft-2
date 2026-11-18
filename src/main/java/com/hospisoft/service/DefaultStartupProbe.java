@@ -6,13 +6,11 @@ import com.hospisoft.db.DatabaseUnavailableException;
 import com.hospisoft.db.SchemaChecker;
 import java.util.List;
 
-/** Real startup check: configuration, then connectivity and credentials, then required tables. */
 public final class DefaultStartupProbe implements StartupProbe {
 
     private final AppConfig config;
     private final SchemaChecker schemaChecker;
 
-    /** @param schemaChecker may be null when the configuration is not usable */
     public DefaultStartupProbe(AppConfig config, SchemaChecker schemaChecker) {
         this.config = config;
         this.schemaChecker = schemaChecker;

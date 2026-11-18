@@ -1,8 +1,3 @@
-/*
- * Citas page: list with filters and pagination, create/reschedule modal, cancel modal and the
- * medico agenda. Every rule (overlaps, past dates, states, scope) lives in Java; this is view glue.
- * Times are local wall time: Java converts with the application zone.
- */
 (function () {
   'use strict';
 
@@ -50,13 +45,10 @@
 
   var currentPage = 1;
   var pendingCancelId = null;
-  /* Rows of the current page by id, so the closing form can show the cita header. */
   var loaded = {};
   var rol = null;
   var medicos = [];
   var pacientes = [];
-
-  /* ---------------------------------------------------------------- formatting */
 
   function formatDate(iso) {
     if (!iso || !ISO_DATE.test(iso)) {
@@ -76,8 +68,6 @@
     return ESTADO_BADGE[estado] || crud.escapeHtml(estado);
   }
 
-  /* ---------------------------------------------------------------- list */
-
   function currentFilter() {
     return {
       texto: searchInput.value.trim() || null,
@@ -95,7 +85,7 @@
     window.HospiSoft.appCall('listCitas', { filter: currentFilter(), page: page, pageSize: crud.PAGE_SIZE })
       .then(function (response) {
         if (!crud.isCurrent('list', token)) {
-          return; // a newer request already answered
+          return;
         }
         if (!response.ok) {
           body.innerHTML = crud.emptyRow(COLUMNS, response.message);
@@ -150,7 +140,6 @@
     return html;
   }
 
-  /* Starts the attention of one of the medico's own citas. */
   function iniciar(id) {
     window.HospiSoft.appCall('iniciarAtencion', { idCita: id })
       .then(function (response) {
@@ -182,8 +171,6 @@
       + '<td class="text-center">' + actions(c) + '</td>'
       + '</tr>';
   }
-
-  /* ---------------------------------------------------------------- selects */
 
   function fillSelect(select, firstLabel, items, labelOf) {
     var selected = select.value;
@@ -228,7 +215,6 @@
     });
   }
 
-  /* Without the lists the form cannot be filled correctly: block Guardar and say so. */
   function requireSelects() {
     if (selectsLoaded) {
       return true;
@@ -238,9 +224,6 @@
     return false;
   }
 
-  /* ---------------------------------------------------------------- modal form */
-
-  /* When the stored medico/paciente is no longer active it is missing from the list: show it anyway (disabled). */
   function selectOrPlaceholder(select, id, label) {
     select.value = id === null || id === undefined ? '' : String(id);
     if (id !== null && id !== undefined && select.value !== String(id)) {
@@ -367,14 +350,11 @@
       });
   }
 
-  /* ---------------------------------------------------------------- agenda */
-
   function agendaRow(slot) {
     var e = crud.escapeHtml;
     if (!slot.citas || slot.citas.length === 0) {
       return '<tr><td>' + e(slot.hora) + '</td><td class="text-muted">Libre</td><td></td><td></td></tr>';
     }
-    /* one line per cita: same-start or off-grid citas sharing the slot are never hidden */
     function lines(render) {
       return slot.citas.map(render).join('<br>');
     }
@@ -415,8 +395,6 @@
     }
   }
 
-  /* ---------------------------------------------------------------- role chrome (cosmetic) */
-
   function applyRole() {
     var session = window.HospiSoft.call('getSession');
     rol = session.ok && session.data ? session.data.rol : null;
@@ -431,13 +409,10 @@
     }
   }
 
-  /* JavaFX WebKit may render date/time inputs as plain text boxes: keep the placeholders usable. */
   function prepareInputs() {
     console.log('date input native picker: ' + (fechaInput.type === 'date') + ', time input native picker: ' + (horaInput.type === 'time'));
     agendaFecha.value = todayIso();
   }
-
-  /* ---------------------------------------------------------------- events */
 
   function bind() {
     document.getElementById('btn-filter').addEventListener('click', function () { load(1); });
@@ -497,7 +472,6 @@
     if (rol === 'ADMIN') {
       loadSelects();
     }
-    /* every role lists citas (scoped in Java to its own for MEDICO / PACIENTE) */
     crud.bindExport({ method: 'exportCitas', filter: currentFilter });
     load(1);
     if (rol === 'MEDICO') {

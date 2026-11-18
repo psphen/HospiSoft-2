@@ -1,8 +1,3 @@
-/*
- * Dashboard: one `dashboard` call fills the four KPI cards, the upcoming citas list and the
- * daily summary. Every value (labels included) comes from the payload, already scoped to the
- * session's role in Java: this file never decides what a role may see.
- */
 (function () {
   'use strict';
 
@@ -13,7 +8,6 @@
     FINALIZADA: '<span class="badge-stock completada">Finalizada</span>',
     CANCELADA: '<span class="badge-stock cancelada">Cancelada</span>'
   };
-  /* The four cards, in the order the payload lists them. */
   var SLOTS = ['medicos', 'pacientes', 'citas', 'medicamentos'];
   var DASH = '–';
 
@@ -42,7 +36,6 @@
       + '-' + (day.length < 2 ? '0' + day : day);
   }
 
-  /* "Hoy" / "Mañana" when it applies, DD/MM/AAAA otherwise. */
   function dayLabel(iso) {
     if (iso === todayIso(0)) {
       return 'Hoy';
@@ -107,7 +100,6 @@
       : citas.map(citaRow).join('');
   }
 
-  /* Stale numbers are worse than no numbers: a failed load wipes every value it cannot refresh. */
   function clearValues() {
     SLOTS.forEach(function (slot) {
       text('kpi-' + slot + '-valor', DASH);
@@ -129,17 +121,15 @@
     window.HospiSoft.appCall('dashboard')
       .then(function (response) {
         if (!crud.isCurrent('dashboard', token)) {
-          return; // a newer request already answered
+          return;
         }
         if (!response.ok) {
-          // HospiSoft.call already raises the DB banner for DB_UNAVAILABLE
           showError(response.message);
           return;
         }
         render(response.data);
       })
       .catch(function () {
-        // the rejection carries a technical (often English) text: the panel shows a fixed message
         if (crud.isCurrent('dashboard', token)) {
           showError('No se pudo cargar el panel');
         }

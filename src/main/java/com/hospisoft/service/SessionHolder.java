@@ -2,7 +2,6 @@ package com.hospisoft.service;
 
 import java.util.Optional;
 
-/** Single mutable slot holding the current session. Shared by the Bridge and the page router. */
 public final class SessionHolder {
 
     private volatile SessionContext current;

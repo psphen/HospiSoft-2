@@ -14,20 +14,8 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/**
- * Audit log use cases: writing the trail (as the {@link AuditLog} the other services depend on)
- * and reading it (ADMIN only).
- *
- * <p>Writes are best-effort: every failure (database down, constraint, unexpected bug) is caught
- * and reported on the error log with class names and SQLStates only, never with the row data,
- * the username or the exception messages, which can carry personal data. The user's operation,
- * already completed when the trail is written, is never affected.
- */
 public final class AuditoriaService implements AuditLog {
-
-    /** auditoria.detalle is VARCHAR(500). */
     public static final int MAX_DETALLE = 500;
-    /** auditoria.username and usuario.username are VARCHAR(60). */
     public static final int MAX_USERNAME = 60;
 
     static final String INVERTED_RANGE = "La fecha final no puede ser anterior a la inicial";
@@ -42,7 +30,6 @@ public final class AuditoriaService implements AuditLog {
         this(auditoria, session, zone, System.err::println);
     }
 
-    /** @param errorLog receives one line per failed write (the console in production, a list in tests) */
     public AuditoriaService(AuditoriaRepository auditoria, Supplier<Optional<SessionContext>> session, AppZone zone,
                             Consumer<String> errorLog) {
         this.auditoria = auditoria;
@@ -55,8 +42,6 @@ public final class AuditoriaService implements AuditLog {
     public AppZone zone() {
         return zone;
     }
-
-    // ------------------------------------------------------------ writes (best-effort)
 
     @Override
     public void record(AccionAuditoria accion, ModuloAuditoria modulo, Long idRegistro, String detalle) {
@@ -91,13 +76,10 @@ public final class AuditoriaService implements AuditLog {
         } catch (RuntimeException ex) {
             try {
                 errorLog.accept("[audit] could not record " + accion + " on " + modulo + ": " + describe(ex));
-            } catch (RuntimeException ignored) {
-                // the audit trail must never break the caller, not even through its own logging
-            }
+            } catch (RuntimeException ignored) {}
         }
     }
 
-    /** Class names and SQLStates only: messages can carry row data (e.g. Key (documento)=(...)). */
     static String describe(Throwable ex) {
         StringBuilder sb = new StringBuilder();
         Throwable current = ex;
@@ -115,10 +97,6 @@ public final class AuditoriaService implements AuditLog {
         return sb.toString();
     }
 
-    /**
-     * Trims and caps {@code value} at {@code max} UTF-16 units without splitting a surrogate pair,
-     * so the result also fits a VARCHAR(max) counted in characters. Blank becomes null.
-     */
     static String truncate(String value, int max) {
         String clean = Validation.clean(value);
         if (clean == null || clean.length() <= max) {
@@ -128,9 +106,6 @@ public final class AuditoriaService implements AuditLog {
         return clean.substring(0, end);
     }
 
-    // ------------------------------------------------------------ reads
-
-    /** Newest first. {@code desde}/{@code hasta} are inclusive local days in the app zone. */
     public Page<Auditoria> list(AuditoriaFilter filter, int page, int pageSize) {
         access.require(Rol.ADMIN);
         AuditoriaFilter f = filter == null ? AuditoriaFilter.NONE : filter;
@@ -143,7 +118,6 @@ public final class AuditoriaService implements AuditLog {
         return auditoria.findPage(new AuditoriaQuery(f.texto(), f.accion(), f.modulo(), from, to), page, pageSize);
     }
 
-    /** Every row {@link #list} would page through (ADMIN only, newest first), up to the export cap. */
     public ExportRows<Auditoria> listForExport(AuditoriaFilter filter) {
         return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
     }

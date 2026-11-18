@@ -47,16 +47,14 @@ class PacienteServiceTest {
         repository.add(paciente(22L, "2003", "Ana", "Ramirez", LocalDate.of(2015, 3, 21), "F", false));
         repository.add(paciente(23L, "2004", "Pedro", "Sanchez", LocalDate.of(1958, 8, 9), "M", true));
         repository.add(paciente(24L, "2005", "Luis", "Vega", LocalDate.of(1970, 1, 1), "M", true));
-        repository.markAttended(20L, 10L);      // dr.garcia attended Maria
-        repository.markAttended(23L, 10L);      // and Pedro
-        repository.markAttended(21L, 11L);      // Juan was attended by another medico
-        repository.markCita(24L, 10L, true);    // Luis: only a cancelled cita with dr.garcia
+        repository.markAttended(20L, 10L);
+        repository.markAttended(23L, 10L);
+        repository.markAttended(21L, 11L);
+        repository.markCita(24L, 10L, true);
         current = ADMIN;
         audit = new RecordingAuditLog();
         service = new PacienteService(repository, () -> Optional.ofNullable(current), CLOCK, audit);
     }
-
-    // ------------------------------------------------------------ permissions
 
     @Test
     void pacienteRoleHasNoAccess() {
@@ -90,7 +88,6 @@ class PacienteServiceTest {
 
     @Test
     void medicoScopeWorksForIdsAboveTheLongCache() {
-        // ids above 127 are not cached: a reference comparison would hide the patient from its own medico
         repository.add(paciente(2020L, "9002", "Big", "Patient", LocalDate.of(1990, 1, 1), "F", true));
         repository.markAttended(2020L, 1010L);
         current = new SessionContext(900, "dr.big", Rol.MEDICO, 1010L, "Big Id");
@@ -101,9 +98,9 @@ class PacienteServiceTest {
     @Test
     void medicoGetsNotFoundForOutOfScopeAndMissingIdsAlike() {
         current = MEDICO;
-        assertThrows(NotFoundException.class, () -> service.get(21));   // attended by someone else
-        assertThrows(NotFoundException.class, () -> service.get(24));   // only a cancelled cita
-        assertThrows(NotFoundException.class, () -> service.get(999)); // does not exist
+        assertThrows(NotFoundException.class, () -> service.get(21));
+        assertThrows(NotFoundException.class, () -> service.get(24));
+        assertThrows(NotFoundException.class, () -> service.get(999));
     }
 
     @Test
@@ -117,8 +114,6 @@ class PacienteServiceTest {
         current = null;
         assertThrows(PermissionException.class, () -> service.list(PacienteFilter.NONE, 1, 10));
     }
-
-    // ------------------------------------------------------------ list / get (admin)
 
     @Test
     void adminListsEverythingWithFiltersAndPaging() {
@@ -141,8 +136,6 @@ class PacienteServiceTest {
             () -> service.list(new PacienteFilter(null, null, "x".repeat(101)), 1, 10));
         assertEquals("Máximo 100 caracteres", ex.errors().get("texto"));
     }
-
-    // ------------------------------------------------------------ save
 
     @Test
     void insertTrimsNormalizesAndAssignsId() {
@@ -201,7 +194,7 @@ class PacienteServiceTest {
         ValidationException old = assertThrows(ValidationException.class,
             () -> service.save(paciente(null, "4002", "A", "B", LocalDate.of(1899, 12, 31), "M", true)));
         assertEquals(PacienteService.BIRTH_DATE_TOO_OLD, old.errors().get("fechaNacimiento"));
-        service.save(paciente(null, "4003", "A", "B", TODAY, "M", true));          // born today is fine
+        service.save(paciente(null, "4003", "A", "B", TODAY, "M", true));
         service.save(paciente(null, "4004", "A", "B", LocalDate.of(1900, 1, 1), "OTRO", true));
     }
 
@@ -221,12 +214,10 @@ class PacienteServiceTest {
         ValidationException ex = assertThrows(ValidationException.class,
             () -> service.save(paciente(null, "2001", "Otra", "Persona", TODAY, "F", true)));
         assertEquals(Validation.DUPLICATE_DOCUMENTO, ex.errors().get("documento"));
-        service.save(paciente(20L, "2001", "Maria", "Torres", LocalDate.of(1990, 5, 14), "F", true)); // self
+        service.save(paciente(20L, "2001", "Maria", "Torres", LocalDate.of(1990, 5, 14), "F", true));
         assertThrows(ValidationException.class,
             () -> service.save(paciente(20L, "2002", "Maria", "Torres", LocalDate.of(1990, 5, 14), "F", true)));
     }
-
-    // ------------------------------------------------------------ delete
 
     @Test
     void deleteWithoutHistoryRemovesTheRow() {
@@ -247,8 +238,6 @@ class PacienteServiceTest {
         assertEquals(DeleteOutcome.DEACTIVATED, service.delete(22));
         assertFalse(repository.findById(22).orElseThrow().activo());
     }
-
-    // ------------------------------------------------------------ audit
 
     @Test
     void insertIsAuditedAsCrearWithTheNewId() {
@@ -302,8 +291,6 @@ class PacienteServiceTest {
         assertTrue(audit.entries().isEmpty(), "only successful writes are audited: " + audit.entries());
     }
 
-    // ------------------------------------------------------------ age
-
     @Test
     void ageIsComputedFromTheServiceClock() {
         assertEquals(TODAY, service.today());
@@ -325,8 +312,6 @@ class PacienteServiceTest {
         Paciente unknown = new Paciente(3L, "3", "A", "B", null, "F", null, null, null, true);
         assertNull(unknown.edad(LocalDate.of(2026, 1, 1)));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportUsesTheSameFilterAndScopeAsTheList() {

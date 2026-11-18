@@ -1,9 +1,5 @@
 package com.hospisoft.model;
 
-/**
- * Action recorded in the audit log. Stored as text in auditoria.accion (the CHECK constraint in
- * db/schema.sql lists exactly these names); {@link #label()} is the Spanish text shown in the UI.
- */
 public enum AccionAuditoria {
     CREAR("Crear"),
     EDITAR("Editar"),

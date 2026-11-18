@@ -82,8 +82,8 @@ class AuthGuardTest {
         assertFalse(AuthGuard.isLocal("https://host/", BASE));
         assertFalse(AuthGuard.isLocal("https://host/index.html", BASE));
         assertFalse(AuthGuard.isLocal("about:blank", BASE));
-        assertFalse(AuthGuard.isLocal(BASE, BASE));                       // trailing slash, no page
-        assertFalse(AuthGuard.isLocal(BASE + "other.html", BASE));        // unknown page under the base
+        assertFalse(AuthGuard.isLocal(BASE, BASE));
+        assertFalse(AuthGuard.isLocal(BASE + "other.html", BASE));
         assertFalse(AuthGuard.isLocal(BASE + "css/style.css", BASE));
         assertFalse(AuthGuard.isLocal("jar:file:/C:/x/app.jar!/index.html", BASE));
         assertFalse(AuthGuard.isLocal(null, BASE));

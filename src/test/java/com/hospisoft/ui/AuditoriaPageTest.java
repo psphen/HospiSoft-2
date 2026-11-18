@@ -19,7 +19,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/** Static checks of the audit page markup and of the sidebar link every page carries. */
 class AuditoriaPageTest {
 
     private static final Path WEB = Paths.get("src", "main", "resources", "web");
@@ -29,7 +28,6 @@ class AuditoriaPageTest {
         return Files.readString(WEB.resolve(file), StandardCharsets.UTF_8);
     }
 
-    /** Non-empty option values of the select with the given id. */
     private static List<String> optionValues(String html, String selectId) {
         Matcher select = Pattern.compile("<select[^>]*id=\"" + selectId + "\"[^>]*>(.*?)</select>", Pattern.DOTALL)
             .matcher(html);

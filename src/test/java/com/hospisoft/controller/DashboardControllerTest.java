@@ -42,7 +42,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** The dashboard answers the whole panel in one call, already scoped to the session's role. */
 class DashboardControllerTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");

@@ -4,13 +4,11 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
 
-/** Typed readers over a parsed JSON object. Every problem is a {@link BadRequestException}. */
 public final class Payload {
 
     private Payload() {
     }
 
-    /** Parses the payload as an object; an empty payload becomes an empty object. */
     public static Map<String, Object> object(String json) {
         if (json == null || json.isBlank()) {
             return Map.of();
@@ -26,7 +24,6 @@ public final class Payload {
         return s;
     }
 
-    /** Null when absent or null; otherwise the value as text (numbers and booleans are stringified). */
     public static String optString(Map<String, Object> body, String key) {
         Object value = body.get(key);
         if (value == null) {
@@ -46,7 +43,6 @@ public final class Payload {
         return value;
     }
 
-    /** Null when absent/null; accepts integral JSON numbers and numeric strings within long range. */
     public static Long optLong(Map<String, Object> body, String key) {
         Object value = body.get(key);
         if (value == null) {
@@ -80,7 +76,6 @@ public final class Payload {
         throw new BadRequestException("Field must be a number: " + key);
     }
 
-    /** Like {@link #optLong} but restricted to the int range. */
     public static int optInt(Map<String, Object> body, String key, int defaultValue) {
         Long value = optLong(body, key);
         if (value == null) {
@@ -92,7 +87,6 @@ public final class Payload {
         return value.intValue();
     }
 
-    /** Null when absent/null; accepts JSON booleans and the strings true/false. */
     public static Boolean optBoolean(Map<String, Object> body, String key) {
         Object value = body.get(key);
         if (value == null) {
@@ -120,7 +114,6 @@ public final class Payload {
         return value == null ? defaultValue : value;
     }
 
-    /** ISO date (yyyy-MM-dd) or null when absent/blank. */
     public static LocalDate optDate(Map<String, Object> body, String key) {
         String value = optString(body, key);
         if (value == null || value.isBlank()) {
@@ -133,7 +126,6 @@ public final class Payload {
         }
     }
 
-    /** Nested object or an empty map when absent. */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> optObject(Map<String, Object> body, String key) {
         Object value = body.get(key);

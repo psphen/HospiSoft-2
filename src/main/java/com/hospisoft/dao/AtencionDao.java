@@ -18,14 +18,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-/**
- * JDBC implementation of {@link AtencionRepository}.
- *
- * <p>Lock order inside a transaction: the medico row first, then every prescribed medicamento in
- * ASCENDING id order. Two concurrent closings therefore take the same locks in the same sequence
- * and cannot deadlock. {@code FOR NO KEY UPDATE} is used so foreign-key key-share locks taken by
- * other inserts are not blocked.
- */
 public final class AtencionDao implements AtencionRepository {
 
     static final String HISTORIA_COLUMNS = """
@@ -58,7 +50,6 @@ public final class AtencionDao implements AtencionRepository {
         " FROM receta r JOIN medicamento md ON md.id = r.id_medicamento"
             + " JOIN historia_clinica h ON h.id = r.id_historia WHERE h.id_paciente = ?";
 
-    /** Historias newest first, but the lines of one historia keep their insertion order. */
     static final String SELECT_RECETAS_PAGE = "SELECT " + RECETA_COLUMNS + ", h.fecha" + RECETA_PAGE_FROM
         + " ORDER BY h.fecha DESC, h.id DESC, r.id" + PAGING;
 
@@ -98,16 +89,12 @@ public final class AtencionDao implements AtencionRepository {
 
     static final String DECREMENT_STOCK = "UPDATE medicamento SET stock = stock - ? WHERE id = ? AND stock >= ?";
 
-    /** The cita already has a historia: id_cita is UNIQUE. */
     static final String HISTORIA_UNIQUE_CONSTRAINT = "historia_clinica_id_cita_key";
 
-    /** Partial unique index: one EN_CURSO cita per medico (defense in depth for the service check). */
     static final String EN_CURSO_UNIQUE_INDEX = "cita_un_en_curso_por_medico";
 
-    /** Message of the service rule the partial unique index also enforces. */
     public static final String ALREADY_EN_CURSO = com.hospisoft.service.AtencionService.ALREADY_EN_CURSO;
 
-    /** Message of the service rule this DAO also enforces at the database level. */
     public static final String ALREADY_CLOSED = com.hospisoft.service.AtencionService.ALREADY_CLOSED;
 
     private final ConnectionPool pool;
@@ -120,8 +107,6 @@ public final class AtencionDao implements AtencionRepository {
     public <T> T inTransaction(Function<AtencionTx, T> work) {
         return pool.inTransaction(connection -> work.apply(new Tx(connection)));
     }
-
-    // ------------------------------------------------------------ reads
 
     @Override
     public Optional<HistoriaView> findHistoriaByCita(long idCita) {
@@ -207,7 +192,6 @@ public final class AtencionDao implements AtencionRepository {
         });
     }
 
-    /** Attaches the recetas to a historia found on the same connection. */
     private static Optional<HistoriaView> withRecetas(Connection connection, Optional<HistoriaView> found)
         throws SQLException {
         if (found.isEmpty()) {
@@ -238,8 +222,6 @@ public final class AtencionDao implements AtencionRepository {
             }
         }
     }
-
-    // ------------------------------------------------------------ transaction scope
 
     private static final class Tx implements AtencionTx {
         private final Connection connection;
@@ -349,7 +331,6 @@ public final class AtencionDao implements AtencionRepository {
             } catch (SQLException ex) {
                 if (DaoSupport.UNIQUE_VIOLATION.equals(ex.getSQLState())
                     && String.valueOf(ex.getMessage()).contains(HISTORIA_UNIQUE_CONSTRAINT)) {
-                    // id_cita is UNIQUE: another session closed this cita first
                     throw new ConflictException("Cita " + idCita + " already has a historia", ALREADY_CLOSED);
                 }
                 throw sneaky(ex);
@@ -393,13 +374,10 @@ public final class AtencionDao implements AtencionRepository {
         }
     }
 
-    /** The Tx interface declares no checked exceptions; the pool classifies SQLExceptions. */
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> RuntimeException sneaky(Throwable ex) throws E {
         throw (E) ex;
     }
-
-    // ------------------------------------------------------------ mapping
 
     static HistoriaView mapHistoria(ResultSet rs) throws SQLException {
         HistoriaClinica historia = new HistoriaClinica(

@@ -4,7 +4,6 @@ import com.hospisoft.bridge.BadRequestException;
 import com.hospisoft.bridge.Payload;
 import java.util.Map;
 
-/** Reads and bounds the {@code page} / {@code pageSize} fields shared by every list payload. */
 final class Paging {
 
     static final int DEFAULT_PAGE_SIZE = 10;

@@ -29,40 +29,15 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-/**
- * Object exposed to JavaScript as {@code window.app}.
- *
- * <p>Contract: every public method takes and returns JSON strings. A call never throws into JS;
- * every outcome is an envelope: {@code {"ok":true,"data":...}} or
- * {@code {"ok":false,"code":"...","message":"..."}} (plus {@code "errors":{field:message}} for
- * VALIDATION).
- *
- * <p>Codes: BAD_REQUEST, VALIDATION, NOT_FOUND, AUTH_FAILED, FORBIDDEN, DB_UNAVAILABLE,
- * DB_AUTH_FAILED, INTERNAL_ERROR.
- *
- * <p>Two calling styles:
- * <ul>
- *   <li>Synchronous methods for in-memory work ({@link #getSession()}, {@link #logout()},
- *       {@link #navigate(String)}, {@link #getAllowedPages()}, {@link #log(String)}).</li>
- *   <li>{@link #call(String, String, String)} for anything that touches the database: it returns
- *       at once, runs the method on a single background thread and later executes
- *       {@code window.__hospisoft.resolve(requestId, envelopeJson)} in the page. Feature modules
- *       add their methods with {@link #register(String, Function)}.</li>
- * </ul>
- */
 public final class Bridge {
-
-    /** Loads a page in the WebView. Implemented by the UI, faked in tests. */
     public interface Navigator {
         void navigate(String page);
 
-        /** Whether the page resource exists; the UI checks the classpath. */
         default boolean exists(String page) {
             return true;
         }
     }
 
-    /** Executes JavaScript in the page on the UI thread. Implemented by the UI, faked in tests. */
     @FunctionalInterface
     public interface ScriptSink {
         void run(String script);
@@ -75,7 +50,6 @@ public final class Bridge {
     public static final String NOT_FOUND_MESSAGE = "El registro no existe";
     public static final String INTERNAL_ERROR_MESSAGE = "Error interno de la aplicación";
     public static final int MAX_LOG_CHARS = 2000;
-    /** Audit text of a logout. */
     public static final String LOGOUT_DETALLE = "Salida del sistema";
 
     private static final Pattern REQUEST_ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
@@ -89,13 +63,11 @@ public final class Bridge {
     private final AuditLog audit;
     private final Map<String, Function<String, String>> asyncMethods = new ConcurrentHashMap<>();
 
-    /** Without an audit trail for logout (tests that do not care about it). */
     public Bridge(AuthService authService, SessionHolder sessions, StartupProbe startupProbe,
                   Navigator navigator, ScriptSink scriptSink) {
         this(authService, sessions, startupProbe, navigator, scriptSink, AuditLog.NONE);
     }
 
-    /** @param audit records LOGOUT for the ending session (login is audited by {@link AuthService}) */
     public Bridge(AuthService authService, SessionHolder sessions, StartupProbe startupProbe,
                   Navigator navigator, ScriptSink scriptSink, AuditLog audit) {
         this.authService = authService;
@@ -113,12 +85,6 @@ public final class Bridge {
         asyncMethods.put("getStartupStatus", payload -> call(() -> startupProbe.probeBlocking().toMap()));
     }
 
-    // ------------------------------------------------------------ async API
-
-    /**
-     * Registers an asynchronous method. {@code body} receives the raw payload JSON and returns the
-     * {@code data} value; any exception it throws is translated into an error envelope.
-     */
     public void register(String method, Function<String, Object> body) {
         if (method == null || method.isBlank() || body == null) {
             throw new IllegalArgumentException("method and body are required");
@@ -126,15 +92,10 @@ public final class Bridge {
         asyncMethods.put(method, payload -> call(() -> body.apply(payload)));
     }
 
-    /** Registered async method names (for diagnostics and tests). */
     public Set<String> asyncMethodNames() {
         return Set.copyOf(asyncMethods.keySet());
     }
 
-    /**
-     * Queues {@code method} and returns immediately. The result reaches the page later through
-     * {@code window.__hospisoft.resolve(requestId, envelopeJson)}.
-     */
     public String call(String requestId, String method, String payloadJson) {
         if (requestId == null || !REQUEST_ID.matcher(requestId).matches()) {
             return error("BAD_REQUEST", "Invalid request id");
@@ -162,29 +123,19 @@ public final class Bridge {
         return ok("queued");
     }
 
-    /** JavaScript that delivers an envelope to the page; both arguments are JSON string literals. */
     static String resolveScript(String requestId, String envelopeJson) {
         return "if (window.__hospisoft) { window.__hospisoft.resolve("
             + Json.write(requestId) + ", " + Json.write(envelopeJson) + "); }";
     }
 
-    /** Stops the background thread. Called when the application exits. */
     public void shutdown() {
         executor.shutdownNow();
     }
 
-    // ------------------------------------------------------------ sync API
-
-    /** @param jsonCredentials {@code {"username":"...","password":"..."}} */
     public String login(String jsonCredentials) {
         return loginEnvelope(jsonCredentials);
     }
 
-    /**
-     * Clears the session at once. The LOGOUT audit entry is queued BEFORE the session is cleared,
-     * with a snapshot of the ending session as its actor, and written on the bridge thread: this
-     * method runs on the UI thread and must not wait for the database.
-     */
     public String logout() {
         return call(() -> {
             sessions.current().ifPresent(this::auditLogout);
@@ -193,7 +144,6 @@ public final class Bridge {
         });
     }
 
-    /** Best-effort: neither a failing audit nor a stopped executor may break the logout. */
     private void auditLogout(SessionContext ending) {
         try {
             executor.execute(() -> {
@@ -208,17 +158,14 @@ public final class Bridge {
         }
     }
 
-    /** data is the session map, or null when nobody is logged in. */
     public String getSession() {
         return call(() -> sessions.current().map(SessionContext::toMap).orElse(null));
     }
 
-    /** Cached status; use the async call for a fresh check. */
     public String getStartupStatus() {
         return call(() -> startupProbe.probe().toMap());
     }
 
-    /** Pages the current role may open (sidebar hiding uses this; the Java guard enforces it). */
     public String getAllowedPages() {
         return call(() -> PageAccess.allowedPages(currentRol()));
     }
@@ -239,16 +186,12 @@ public final class Bridge {
         });
     }
 
-    /** Receives console output forwarded from the page. */
     public void log(String message) {
         try {
             System.out.println("[web] " + sanitizeLog(message));
-        } catch (RuntimeException ignored) {
-            // logging must never break the page
-        }
+        } catch (RuntimeException ignored) {}
     }
 
-    /** Caps the length and removes control characters (except tab) so the page cannot forge log lines. */
     public static String sanitizeLog(String message) {
         if (message == null) {
             return "null";
@@ -270,13 +213,11 @@ public final class Bridge {
         return sb.toString();
     }
 
-    // ------------------------------------------------------------ internals
-
     private String loginEnvelope(String jsonCredentials) {
         try {
             return ok(loginBody(jsonCredentials));
         } catch (DatabaseUnavailableException ex) {
-            startupProbe.refresh(); // let the status banner recover when the database comes back
+            startupProbe.refresh();
             return translate(ex);
         } catch (Throwable ex) {
             return translate(ex);
@@ -346,7 +287,6 @@ public final class Bridge {
         return error("INTERNAL_ERROR", INTERNAL_ERROR_MESSAGE);
     }
 
-    /** Class names and SQLStates only: driver messages can carry row data (e.g. Key (documento)=(...)). */
     static String describe(Throwable ex) {
         StringBuilder sb = new StringBuilder();
         Throwable current = ex;

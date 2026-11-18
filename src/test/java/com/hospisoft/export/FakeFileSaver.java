@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Test double for the save dialog: answers a fixed path (or "cancelled") and records each request. */
 public final class FakeFileSaver implements FileSaver {
 
     public record Request(String suggestedFileName, ExportFormat format) {
@@ -14,7 +13,6 @@ public final class FakeFileSaver implements FileSaver {
     private final List<Request> requests = new ArrayList<>();
     private Path answer;
 
-    /** @param answer the path the "user" picks; null means the dialog is cancelled */
     public FakeFileSaver(Path answer) {
         this.answer = answer;
     }

@@ -1,8 +1,3 @@
-/*
- * Attention closing form (#modalAtencion) and read-only clinical record (#modalHistoria).
- * Shared by citas.html and pacientes.html; every rule (stock, states, scope) lives in Java.
- * Each page only needs the modals it uses: missing elements simply disable that part.
- */
 (function () {
   'use strict';
 
@@ -27,7 +22,6 @@
   var medicamentosLoaded = false;
   var rowSeq = 0;
   var onSaved = null;
-  /* Guards against a reply from a modal the user already dismissed and reopened. */
   var openToken = 0;
 
   function escape(value) {
@@ -51,8 +45,6 @@
       ? '<span class="badge-stock disponible">Entregado</span>'
       : '<span class="badge-stock pendiente">Pendiente</span>';
   }
-
-  /* ---------------------------------------------------------------- closing form */
 
   function medicamentoLabel(m) {
     return m.codigo + ' — ' + m.nombre + ' (' + m.presentacion + ') · stock: ' + m.stock;
@@ -92,11 +84,6 @@
     recetasBody.insertAdjacentHTML('beforeend', html);
   }
 
-  /*
-   * Reveals the observation textarea on every line that cannot be delivered. Quantities of the
-   * same medicamento accumulate across rows, exactly like the server rule, so two rows that fit
-   * on their own but overflow together are both flagged before submitting.
-   */
   function refreshRows() {
     var remaining = {};
     Array.prototype.forEach.call(recetasBody.querySelectorAll('tr[data-row]'), function (row) {
@@ -143,7 +130,6 @@
     });
   }
 
-  /* VALIDATION errors arrive as "recetas[i].field": map them onto the right row. */
   function showRecetaErrors(errors) {
     Object.keys(errors || {}).forEach(function (key) {
       var match = /^recetas\[(\d+)\]\.(\w+)$/.exec(key);
@@ -161,7 +147,6 @@
       }
       input.classList.remove('d-none');
       input.classList.add('is-invalid');
-      /* every field is followed by its own feedback div (the select has two siblings before it) */
       var feedback = input.nextElementSibling;
       while (feedback && !feedback.classList.contains('invalid-feedback')) {
         feedback = feedback.nextElementSibling;
@@ -202,7 +187,6 @@
     });
   }
 
-  /* Re-renders the options of the rows already on screen once the catalogue arrives. */
   function refreshSelects() {
     Array.prototype.forEach.call(recetasBody.querySelectorAll('[data-field="idMedicamento"]'), function (select) {
       var selected = select.value;
@@ -211,7 +195,6 @@
     });
   }
 
-  /** Opens the closing form for a cita (EN_CURSO). */
   function openFinalizar(cita, afterSaved) {
     if (!form) {
       return;
@@ -234,11 +217,11 @@
     addRecetaButton.disabled = true;
     loadMedicamentos().then(function () {
       if (token !== openToken) {
-        return; // the modal was dismissed and reopened meanwhile
+        return;
       }
       if (!medicamentosLoaded) {
         crud.showModalAlert(alertBox, 'No se pudieron cargar los medicamentos');
-        return; // Guardar and Agregar stay disabled: the form cannot be filled correctly
+        return;
       }
       refreshSelects();
       saveButton.disabled = false;
@@ -265,7 +248,7 @@
     window.HospiSoft.appCall('finalizarAtencion', payload)
       .then(function (response) {
         if (token !== openToken) {
-          return; // reply of a modal the user already closed and reopened
+          return;
         }
         setPending(false);
         crud.setBusy(saveButton, false);
@@ -294,7 +277,6 @@
       });
   }
 
-  /* While a close is in flight the modal cannot be dismissed, so no stale reply hits a reopened form. */
   function setPending(pending) {
     var element = document.getElementById('modalAtencion');
     if (!element) {
@@ -308,8 +290,6 @@
       element.removeAttribute('data-bs-keyboard');
     }
   }
-
-  /* ---------------------------------------------------------------- historia (read-only) */
 
   function renderHistoria(historia) {
     document.getElementById('historia-paciente').textContent =
@@ -339,7 +319,6 @@
     }).join('');
   }
 
-  /** Opens the read-only record of a cita. */
   function openHistoriaDeCita(idCita) {
     if (!historiaBody) {
       return;
@@ -361,7 +340,6 @@
     });
   }
 
-  /** Opens the read-only record from an already loaded historia (the historial list). */
   function openHistoria(historia) {
     if (!historiaBody) {
       return;
@@ -370,8 +348,6 @@
     renderHistoria(historia);
     crud.modal('modalHistoria').show();
   }
-
-  /* ---------------------------------------------------------------- events */
 
   var addRecetaButton = document.getElementById('btn-add-receta');
 

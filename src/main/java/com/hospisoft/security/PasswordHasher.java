@@ -9,13 +9,6 @@ import java.util.Base64;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
-/**
- * PBKDF2-HMAC-SHA256 password hashing.
- *
- * <p>Parameters: 600000 iterations (OWASP guidance for PBKDF2-HMAC-SHA256), 16-byte random salt,
- * 256-bit derived key.
- * Salt and hash are stored Base64-encoded in usuario.salt and usuario.password_hash.
- */
 public final class PasswordHasher {
 
     public static final String ALGORITHM = "PBKDF2WithHmacSHA256";
@@ -25,7 +18,6 @@ public final class PasswordHasher {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    /** Base64-encoded salt and derived key, ready to be stored. */
     public record Hashed(String saltBase64, String hashBase64) {
     }
 
@@ -39,7 +31,6 @@ public final class PasswordHasher {
         return new Hashed(Base64.getEncoder().encodeToString(salt), Base64.getEncoder().encodeToString(key));
     }
 
-    /** Constant-time comparison. Returns false (never throws) on malformed stored values. */
     public static boolean verify(char[] password, String saltBase64, String hashBase64) {
         if (password == null || saltBase64 == null || hashBase64 == null) {
             return false;
@@ -74,10 +65,6 @@ public final class PasswordHasher {
         }
     }
 
-    /**
-     * Utility entry point used to generate seed hashes:
-     * {@code java -cp target/classes com.hospisoft.security.PasswordHasher <password>}.
-     */
     public static void main(String[] args) {
         if (args.length == 0) {
             System.err.println("Usage: PasswordHasher <password> [<password> ...]");

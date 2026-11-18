@@ -4,11 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.LongSupplier;
 
-/**
- * In-memory brute-force throttle: after {@link #MAX_FAILURES} consecutive failures for the same
- * username, further attempts are rejected for {@link #LOCK_MILLIS}. A success clears the counter.
- * Per-process only (the desktop app is single-user), which is the intended scope.
- */
 public final class LoginThrottle {
 
     public static final int MAX_FAILURES = 5;
@@ -31,7 +26,6 @@ public final class LoginThrottle {
         this.clock = clock;
     }
 
-    /** @throws AuthenticationException when the username is currently locked */
     public synchronized void check(String username) {
         Entry entry = entries.get(key(username));
         if (entry == null) {
@@ -42,7 +36,7 @@ public final class LoginThrottle {
             throw new AuthenticationException(LOCKED_MESSAGE);
         }
         if (entry.lockedUntil != 0 && entry.lockedUntil <= now) {
-            entries.remove(key(username)); // lock expired: start over
+            entries.remove(key(username));
         }
     }
 
