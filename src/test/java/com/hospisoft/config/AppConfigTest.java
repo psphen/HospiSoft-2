@@ -54,7 +54,6 @@ class AppConfigTest {
     @Test
     void passwordsAreReadAsUtf8AndVerbatim(@TempDir Path dir) throws IOException {
         Path file = dir.resolve("config.properties");
-        // In .properties a backslash must be doubled; trailing spaces are part of the value.
         Files.writeString(file, "db.url=x\ndb.user=u\ndb.password=contrase\u00f1a\u20ac\\\\x  \n",
             StandardCharsets.UTF_8);
         AppConfig config = AppConfig.load(List.of(file));
@@ -64,7 +63,6 @@ class AppConfigTest {
 
     @Test
     void unreadableFileIsAReadError(@TempDir Path dir) {
-        // A directory passes no isRegularFile check here: fromFile is exercised directly.
         AppConfig config = AppConfig.fromFile(dir);
         assertEquals(AppConfig.State.READ_ERROR, config.state());
         assertEquals(dir, config.expectedPath());
@@ -90,14 +88,12 @@ class AppConfigTest {
 
     @Test
     void theJpackageAppImageRootIsResolvedFromTheJarDirectory(@TempDir Path dir) throws IOException {
-        // jpackage app-image layout: HospiSoft/HospiSoft.exe and HospiSoft/app/hospisoft-desktop.jar
         Path image = Files.createDirectories(dir.resolve("HospiSoft"));
         Path appDir = Files.createDirectories(image.resolve("app"));
         Files.writeString(appDir.resolve("HospiSoft.cfg"), "[Application]\n", StandardCharsets.UTF_8);
         assertEquals(image, AppConfig.appImageRootOf(appDir));
         assertNull(AppConfig.appImageRootOf(dir.resolve("target")), "only an 'app' directory has a root");
 
-        // a config.properties next to the launcher is found even though the jar is one level deeper
         Path besideLauncher = image.resolve("config.properties");
         Files.writeString(besideLauncher, "db.url=x\ndb.user=u\ndb.password=p\n", StandardCharsets.UTF_8);
         AppConfig config = AppConfig.load(List.of(appDir.resolve("config.properties"), besideLauncher));
@@ -107,7 +103,6 @@ class AppConfigTest {
 
     @Test
     void anAppDirectoryWithoutALauncherConfigIsNotAnImage(@TempDir Path dir) throws IOException {
-        // a plain Maven/Gradle module called "app" must not make the parent directory a candidate
         Path appDir = Files.createDirectories(dir.resolve("workspace").resolve("app"));
         Files.writeString(appDir.resolve("hospisoft-desktop.jar"), "not really a jar", StandardCharsets.UTF_8);
         assertNull(AppConfig.appImageRootOf(appDir), "no .cfg means no jpackage image");
@@ -127,7 +122,6 @@ class AppConfigTest {
             Path workingDir = Path.of("").toAbsolutePath().resolve(AppConfig.FILE_NAME);
             assertEquals(workingDir, candidates.get(candidates.size() - 1),
                 "the working directory is the last resort");
-            // running from target/test-classes there is no jar, so only the two ends are present
             assertTrue(candidates.size() >= 2 && candidates.size() <= 4, "unexpected candidates: " + candidates);
             assertEquals(candidates.size(), candidates.stream().distinct().count(), "candidates are de-duplicated");
         } finally {

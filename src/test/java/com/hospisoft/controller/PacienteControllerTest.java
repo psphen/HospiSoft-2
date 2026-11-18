@@ -37,7 +37,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** End-to-end paciente methods through the async bridge with the in-memory repository (no database). */
 class PacienteControllerTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
@@ -80,7 +79,6 @@ class PacienteControllerTest {
         bridge.shutdown();
     }
 
-    /** Calls an async method and waits for its envelope. */
     private Map<String, Object> invoke(String method, String payload) throws InterruptedException {
         String requestId = "p" + (++sequence);
         Map<String, Object> ack = Json.parseObject(bridge.call(requestId, method, payload));
@@ -163,8 +161,6 @@ class PacienteControllerTest {
             assertEquals(Bridge.FORBIDDEN_MESSAGE, envelope.get("message"));
         }
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportWritesTheFilteredListWithReadableValues() throws Exception {

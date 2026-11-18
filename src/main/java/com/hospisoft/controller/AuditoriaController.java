@@ -19,20 +19,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
-/**
- * MVC controller of the audit log (read-only): receives the View's request from the JS bridge,
- * parses the payload, delegates to {@link AuditoriaService} (the Model, ADMIN only) and returns
- * display-ready DTOs.
- *
- * <p>listAuditoria {@code {"filter":{"texto","accion","modulo","desde":"yyyy-MM-dd","hasta":"yyyy-MM-dd"},
- * "page","pageSize"}} -> {@code {"items":[dto],"total","page","pageSize","totalPages"}}, newest first.
- * {@code desde}/{@code hasta} are inclusive local days; blank selects mean "all". Unknown accion/modulo
- * codes and malformed dates are BAD_REQUEST; {@code hasta} before {@code desde} is VALIDATION.
- * DTO: id, fecha (yyyy-MM-dd HH:mm:ss in the app zone), fechaHora (ISO-8601 with offset), idUsuario,
- * username, rol, accion, accionLabel, modulo, moduloLabel, idRegistro, detalle.
- *
- * <p>exportAuditoria takes the same filter plus {@code "format":"xlsx|pdf"} (see {@link Exports}).
- */
 public final class AuditoriaController implements Controller {
 
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -69,7 +55,6 @@ public final class AuditoriaController implements Controller {
             entry -> toMap(entry, auditoria.zone()));
     }
 
-    /** Exporting the trail is itself recorded (EXPORTAR on module AUDITORIA). */
     private Object export(String payload) {
         Map<String, Object> body = Payload.object(payload);
         AuditoriaFilter filter = filter(body);

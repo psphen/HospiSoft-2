@@ -4,7 +4,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Result of the startup health check shown on the login page. */
 public record StartupStatus(State state, String expectedPath, List<String> missingKeys, List<String> missingTables) {
 
     public enum State {

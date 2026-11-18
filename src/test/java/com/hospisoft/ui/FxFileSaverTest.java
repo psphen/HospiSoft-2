@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** The dialog itself needs a running JavaFX toolkit; these are its pure folder rules. */
 class FxFileSaverTest {
 
     @TempDir

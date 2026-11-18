@@ -24,39 +24,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/**
- * Attention lifecycle, clinical record and prescriptions (phase 5).
- *
- * <p>Only a MEDICO starts and closes its own citas, and only one cita may be EN_CURSO per medico.
- * Closing writes the cita state, the historia and every receta, and decrements the stock of the
- * delivered lines, all in one transaction: the medico row is locked first and then each prescribed
- * medicamento in ascending id order (deadlock-avoidance order). A line whose locked stock is below
- * the requested quantity - or whose medicamento is inactive - is stored as not delivered and then
- * requires {@code observacionNoDisponible}.
- *
- * <p>The historia is immutable (database triggers reject UPDATE/DELETE/TRUNCATE) and there is at
- * most one per cita: a second closing surfaces as CONFLICT. Starting and closing are recorded in the
- * audit log after the commit (never inside the transaction, so an audit failure cannot roll it back).
- *
- * <p>Reads: ADMIN sees everything; MEDICO the historial of its own patients (a non-cancelled cita
- * with them); PACIENTE only its own historias and recetas. Out-of-scope reads answer NOT_FOUND.
- */
 public final class AtencionService {
-
-    /** historia_clinica.diagnostico is TEXT (unbounded): this is the business limit. */
     static final int MAX_DIAGNOSTICO = 500;
-    /** historia_clinica.tratamiento is TEXT (unbounded) and nullable; required by business rule. */
     static final int MAX_TRATAMIENTO = 500;
-    /** historia_clinica.notas is TEXT (unbounded). */
     static final int MAX_NOTAS = 1000;
-    /** cita.observaciones is TEXT (unbounded). */
     static final int MAX_OBSERVACIONES = 500;
     static final int MAX_DOSIS = 100;
     static final int MAX_DURACION = 100;
-    /** receta.observacion_no_disponible is VARCHAR(200). */
     static final int MAX_OBSERVACION_NO_DISPONIBLE = 200;
     static final int MAX_CANTIDAD = 9999;
-    /** Upper bound of prescribed lines per attention (keeps one transaction bounded). */
     static final int MAX_RECETAS = 50;
 
     public static final String ALREADY_EN_CURSO = "Ya tiene una atención en curso";
@@ -67,7 +43,6 @@ public final class AtencionService {
     static final String TOO_MANY_RECETAS = "Máximo " + MAX_RECETAS + " medicamentos por atención";
     static final String STOCK_RACE = "El stock cambió durante la atención. Intente finalizar nuevamente.";
     static final String MEDICO_UNAVAILABLE = "La cuenta del médico no está activa";
-    /** Shown when the cita was already closed (second close, or a historia already exists). */
     public static final String ALREADY_CLOSED = "La atención ya fue finalizada";
 
     private final AtencionRepository atenciones;
@@ -96,13 +71,9 @@ public final class AtencionService {
         return zone;
     }
 
-    // ------------------------------------------------------------ lifecycle
-
-    /** PROGRAMADA -> EN_CURSO on one of the session medico's own citas. */
     public CitaView iniciar(long idCita) {
         SessionContext current = access.require(Rol.MEDICO);
         long idMedico = referenceOf(current);
-        // read before the transaction only for the audit text; the transaction decides existence and scope
         String paciente = citas.findById(idCita)
             .filter(view -> view.cita().idMedico() == idMedico)
             .map(view -> " - " + view.pacienteNombre())
@@ -117,13 +88,11 @@ public final class AtencionService {
             }
             return null;
         });
-        // committed: audit BEFORE the reload, from data already in hand, so a failed read cannot hide the write
         audit.record(AccionAuditoria.INICIAR_ATENCION, ModuloAuditoria.ATENCION, idCita,
             "Atención iniciada - cita #" + idCita + paciente);
         return reloadCita(idCita);
     }
 
-    /** EN_CURSO -> FINALIZADA together with the historia, its recetas and the stock decrements. */
     public Atencion finalizar(AtencionInput input) {
         SessionContext current = access.require(Rol.MEDICO);
         long idMedico = referenceOf(current);
@@ -135,7 +104,7 @@ public final class AtencionService {
         CitaView cita = citas.findById(idCita)
             .orElseThrow(() -> new NotFoundException("Cita " + idCita + " not found"));
         if (cita.cita().idMedico() != idMedico) {
-            throw new NotFoundException("Cita " + idCita + " not found"); // never reveal other medicos' citas
+            throw new NotFoundException("Cita " + idCita + " not found");
         }
         long idPaciente = cita.cita().idPaciente();
 
@@ -151,7 +120,6 @@ public final class AtencionService {
                 clean.notas);
             for (Delivery delivery : deliveries) {
                 if (delivery.deliver && tx.decrementStock(delivery.line.idMedicamento, delivery.line.cantidad) == 0) {
-                    // the row is locked, so this cannot happen: an invariant broke, roll everything back
                     throw new ConflictException(
                         "Stock of medicamento " + delivery.line.idMedicamento + " changed while locked", STOCK_RACE);
                 }
@@ -162,7 +130,6 @@ public final class AtencionService {
             return new Closed(historia, deliveries.size(), undelivered);
         });
         long idHistoria = closed.idHistoria;
-        // committed: audit BEFORE the reloads, from data already in hand, so a failed read cannot hide the write
         audit.record(AccionAuditoria.FINALIZAR_ATENCION, ModuloAuditoria.ATENCION, idCita,
             "Atención finalizada - cita #" + idCita + " - " + cita.pacienteNombre() + " - historia #" + idHistoria
                 + " - " + (closed.lines == 0
@@ -174,9 +141,6 @@ public final class AtencionService {
         return new Atencion(idHistoria, reloadCita(idCita), stored.recetas());
     }
 
-    // ------------------------------------------------------------ reads
-
-    /** The historia of a cita the caller may see. */
     public HistoriaView historiaDeCita(long idCita) {
         SessionContext current = access.require(Rol.ADMIN, Rol.MEDICO, Rol.PACIENTE);
         CitaView cita = citas.findById(idCita)
@@ -188,11 +152,6 @@ public final class AtencionService {
             .orElseThrow(() -> new NotFoundException("Cita " + idCita + " has no historia"));
     }
 
-    /**
-     * Clinical history of a patient (newest first). ADMIN and the patient see every entry; a MEDICO
-     * sees only the entries it wrote, so the list never shows a colleague's diagnosis that the
-     * detail view ({@link #historiaDeCita(long)}, scoped to own citas) would refuse to open.
-     */
     public Page<HistoriaView> historialPaciente(long idPaciente, int page, int pageSize) {
         SessionContext current = access.require(Rol.ADMIN, Rol.MEDICO, Rol.PACIENTE);
         Long idMedico = null;
@@ -209,26 +168,20 @@ public final class AtencionService {
                     throw new NotFoundException("Paciente " + idPaciente + " not found");
                 }
             }
-            default -> {
-                // ADMIN sees every entry of every patient
-            }
+            default -> {}
         }
         return atenciones.findHistoriasPage(new HistoriaQuery(idPaciente, idMedico, null), page, pageSize);
     }
 
-    /** The session patient's own prescriptions, newest first. */
     public Page<RecetaView> misRecetas(int page, int pageSize) {
         SessionContext current = access.require(Rol.PACIENTE);
         return atenciones.findRecetasPage(referenceOf(current), page, pageSize);
     }
 
-    /** Active medicamentos with their stock, for the prescription form. */
     public List<Medicamento> medicamentosParaRecetar() {
         access.require(Rol.MEDICO, Rol.ADMIN);
         return medicamentos.findAllActive();
     }
-
-    // ------------------------------------------------------------ internals
 
     private record Line(long idMedicamento, int cantidad, String dosis, String duracion, String observacion,
                         int index) {
@@ -240,7 +193,6 @@ public final class AtencionService {
     private record Delivery(Line line, boolean deliver, String observacion) {
     }
 
-    /** What the closing transaction committed, for the audit text. */
     private record Closed(long idHistoria, int lines, int undelivered) {
     }
 
@@ -254,7 +206,6 @@ public final class AtencionService {
         }
     }
 
-    /** 0 affected rows: missing or another medico's cita is NOT_FOUND, a wrong state is CONFLICT. */
     private static RuntimeException stateFailure(Optional<EstadoCita> estado, long idCita, String message) {
         if (estado.isEmpty()) {
             return new NotFoundException("Cita " + idCita + " not found");
@@ -262,7 +213,6 @@ public final class AtencionService {
         return new ConflictException("Cita " + idCita + " is " + estado.get(), message);
     }
 
-    /** Closing failed: an already finished cita gets its own message, any other state the generic one. */
     private static RuntimeException closeFailure(Optional<EstadoCita> estado, long idCita) {
         if (estado.isPresent() && estado.get() == EstadoCita.FINALIZADA) {
             return new ConflictException("Cita " + idCita + " is FINALIZADA", ALREADY_CLOSED);
@@ -270,7 +220,6 @@ public final class AtencionService {
         return stateFailure(estado, idCita, NOT_EN_CURSO);
     }
 
-    /** Locks every distinct medicamento in ASCENDING id order (deadlock-avoidance order). */
     private static Map<Long, AtencionRepository.MedicamentoLock> lockMedicamentos(
         AtencionRepository.AtencionTx tx, List<Line> lines) {
         Map<Long, AtencionRepository.MedicamentoLock> locked = new LinkedHashMap<>();
@@ -291,11 +240,6 @@ public final class AtencionService {
         return locked;
     }
 
-    /**
-     * Decides, with the locked stock, which lines are delivered. Several lines of the same
-     * medicamento consume the stock cumulatively. A line that cannot be delivered needs an
-     * observation.
-     */
     private static List<Delivery> decideDeliveries(List<Line> lines,
                                                    Map<Long, AtencionRepository.MedicamentoLock> locked) {
         Map<Long, Integer> remaining = new HashMap<>();
@@ -338,7 +282,7 @@ public final class AtencionService {
 
         if (in.recetas().size() > MAX_RECETAS) {
             v.reject("recetas", TOO_MANY_RECETAS);
-            v.throwIfInvalid(); // stop before the per-line lookups
+            v.throwIfInvalid();
         }
         List<Line> lines = new ArrayList<>(in.recetas().size());
         for (int i = 0; i < in.recetas().size(); i++) {
@@ -364,7 +308,6 @@ public final class AtencionService {
         return new Clean(diagnostico, tratamiento, notas, observaciones, lines);
     }
 
-    /** Ids are boxed Longs: compare by value, never by reference (ids above 127 are not cached). */
     private static boolean citaInScope(SessionContext session, CitaView cita) {
         return switch (session.rol()) {
             case ADMIN -> true;

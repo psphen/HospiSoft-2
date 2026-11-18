@@ -15,15 +15,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/**
- * Ties db/schema.sql to the hashing implementation: every seeded account must verify against the
- * documented plaintext password with the current PasswordHasher parameters.
- */
 class SchemaSeedTest {
 
     private static final Path SCHEMA = Paths.get("db", "schema.sql");
 
-    /** Documented test credentials (also listed in the header of schema.sql and in README.md). */
     private static final Map<String, String> PLAINTEXT = Map.of(
         "admin", "Admin123*",
         "dr.garcia", "Medico123*",
@@ -32,7 +27,6 @@ class SchemaSeedTest {
         "paciente1", "Paciente123*",
         "paciente2", "Paciente123*");
 
-    /** One usuario VALUES row: ('username', 'hash', 'salt', 'ROL', ... */
     private static final Pattern ROW = Pattern.compile(
         "^\\s*\\('([^']+)',\\s*'([^']+)',\\s*'([^']+)',\\s*'(ADMIN|MEDICO|PACIENTE)'", Pattern.MULTILINE);
 
@@ -71,7 +65,6 @@ class SchemaSeedTest {
         }
     }
 
-    /** One medicamento VALUES row: ('codigo', 'nombre', 'descripcion', 'presentacion', stock, stock_minimo, ... */
     private static final Pattern MED_ROW = Pattern.compile(
         "^\\s*\\('(MED-[0-9]+)',\\s*'[^']+',\\s*'[^']*',\\s*'[^']+',\\s*(\\d+),\\s*(\\d+)", Pattern.MULTILINE);
 
@@ -102,7 +95,6 @@ class SchemaSeedTest {
         assertTrue(outOfStock >= 1, "at least 1 AGOTADO seed expected");
     }
 
-    /** One cita VALUES row: ('doc medico', 'doc paciente', interval '<offset>', '[seed] ...', 'ESTADO', ... */
     private static final String INTERVAL_OR_NULL = "(NULL(?:::interval)?|interval '[^']+')";
     private static final Pattern CITA_ROW = Pattern.compile(
         "^\\s*\\('(\\d+)',\\s*'(\\d+)',\\s*interval '([^']+)',\\s*'\\[seed\\][^']*',\\s*'(PROGRAMADA|EN_CURSO|FINALIZADA|CANCELADA)',\\s*"
@@ -110,10 +102,6 @@ class SchemaSeedTest {
         Pattern.MULTILINE);
     private static final Pattern INTERVAL_PART = Pattern.compile("(\\d+)\\s*(day|days|hour|hours|minute|minutes)");
 
-    /**
-     * Minutes relative to the base hour. Negative literals must be single-unit minutes
-     * ("-155 minutes") because PostgreSQL applies the sign per field in multi-field literals.
-     */
     static long offsetMinutes(String literal) {
         String text = literal.trim();
         boolean negative = text.startsWith("-");
@@ -137,7 +125,6 @@ class SchemaSeedTest {
         return minutes;
     }
 
-    /** null for NULL / NULL::interval, otherwise the minutes of the interval literal. */
     private static Long optionalMinutes(String token) {
         if (token.startsWith("NULL")) {
             return null;
@@ -194,12 +181,10 @@ class SchemaSeedTest {
                 }
             }
         }
-        // dr.garcia (1001001001) has one future PROGRAMADA and one earlier FINALIZADA today
         assertTrue(rows.stream().anyMatch(r -> r[0].equals("1001001001") && r[3].equals("PROGRAMADA") && offsetMinutes(r[2]) > 0));
         assertTrue(rows.stream().anyMatch(r -> r[0].equals("1001001001") && r[3].equals("FINALIZADA")
             && offsetMinutes(r[2]) < 0 && offsetMinutes(r[2]) > -12 * 60));
     }
-
 
     private static final Pattern HISTORIA_FOR_MOTIVO = Pattern.compile(
         "INSERT INTO historia_clinica .*?c\\.motivo = '(\\[seed\\][^']*)'", Pattern.DOTALL);

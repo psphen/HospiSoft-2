@@ -1,13 +1,5 @@
 package com.hospisoft.bridge;
 
-/**
- * The object actually exposed to JavaScript as {@code window.app}.
- *
- * <p>LiveConnect exposes every public method of the injected object, so this facade exists to keep
- * the surface minimal: only the eight methods below are reachable from the page. Lifecycle and
- * registration methods of {@link Bridge} ({@code register}, {@code shutdown},
- * {@code asyncMethodNames}) are deliberately not delegated. {@code JsApiTest} pins this set.
- */
 public final class JsApi {
 
     private final Bridge bridge;

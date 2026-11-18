@@ -35,7 +35,6 @@ class CitaServiceTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final AppZone ZONE = new AppZone(BOGOTA);
-    /** 2026-10-27 08:00 in Bogota (UTC-5). */
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-27T13:00:00Z"), BOGOTA);
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 27);
     private static final LocalDate TOMORROW = TODAY.plusDays(1);
@@ -70,8 +69,6 @@ class CitaServiceTest {
         pacientes.add(new Paciente(21L, "2002", "Juan", "Martinez", LocalDate.of(1985, 11, 2), "M", null, null, null, true));
         pacientes.add(new Paciente(22L, "2003", "Ana", "Ramirez", LocalDate.of(2015, 3, 21), "F", null, null, null, false));
         citas = new InMemoryCitaRepository(medicos, pacientes);
-        // today 09:00 garcia/maria PROGRAMADA; today 07:00 garcia/juan FINALIZADA; tomorrow 10:00 lopez/juan;
-        // yesterday 09:00 garcia/maria CANCELADA; today 16:00 garcia/juan CANCELADA
         citas.add(new Cita(1L, 10L, 20L, at(TODAY, 9, 0), "Control", EstadoCita.PROGRAMADA, null, null, null));
         citas.add(new Cita(2L, 10L, 21L, at(TODAY, 7, 0), "Gripe", EstadoCita.FINALIZADA, at(TODAY, 7, 0), at(TODAY, 7, 25), null));
         citas.add(new Cita(3L, 11L, 21L, at(TOMORROW, 10, 0), "Vacuna", EstadoCita.PROGRAMADA, null, null, null));
@@ -82,8 +79,6 @@ class CitaServiceTest {
         audit.onRecord(() -> assertFalse(citas.transactionOpen(), "audit must be written after the commit"));
         service = new CitaService(citas, medicos, pacientes, () -> Optional.ofNullable(current), CLOCK, ZONE, audit);
     }
-
-    // ------------------------------------------------------------ audit
 
     @Test
     void createIsAuditedAfterTheCommit() {
@@ -143,7 +138,7 @@ class CitaServiceTest {
     @Test
     void rejectedCitaWritesAreNotAudited() {
         assertThrows(ValidationException.class, () -> service.create(input(10L, 21L, TODAY.toString(), "09:00", "x")));
-        assertThrows(ValidationException.class, () -> service.cancel(2)); // FINALIZADA
+        assertThrows(ValidationException.class, () -> service.cancel(2));
         assertThrows(NotFoundException.class, () -> service.cancel(999));
         current = GARCIA;
         assertThrows(PermissionException.class, () -> service.cancel(1));
@@ -153,8 +148,6 @@ class CitaServiceTest {
     private ValidationException invalid(CitaInput in) {
         return assertThrows(ValidationException.class, () -> service.create(in));
     }
-
-    // ------------------------------------------------------------ zone
 
     @Test
     void localWallTimeIsConvertedThroughTheZone() {
@@ -166,8 +159,6 @@ class CitaServiceTest {
         assertEquals(Instant.parse("2026-10-28T14:00:00Z"), created.cita().fechaHoraProgramada().toInstant());
         assertEquals(LocalTime.of(9, 0), ZONE.timeOf(created.cita().fechaHoraProgramada()));
     }
-
-    // ------------------------------------------------------------ create: overlap matrix and locks
 
     @Test
     void adjacentSlotsAreAllowedAndLocksFollowTheGlobalOrder() {
@@ -186,7 +177,7 @@ class CitaServiceTest {
 
     @Test
     void cancelledCitasDoNotBlock() {
-        service.create(input(10L, 21L, TODAY.toString(), "16:00", "Libre otra vez")); // cita 5 is CANCELADA
+        service.create(input(10L, 21L, TODAY.toString(), "16:00", "Libre otra vez"));
     }
 
     @Test
@@ -198,10 +189,10 @@ class CitaServiceTest {
 
     @Test
     void rowsAreRecheckedInsideTheTransaction() {
-        citas.lockOverrides.put("medico:10", Optional.of(false)); // deactivated after the fast-path check
+        citas.lockOverrides.put("medico:10", Optional.of(false));
         ValidationException inactive = invalid(input(10L, 21L, TODAY.toString(), "10:00", "x"));
         assertEquals(Validation.MUST_BE_ACTIVE, inactive.errors().get("idMedico"));
-        citas.lockOverrides.put("medico:10", Optional.empty()); // deleted meanwhile
+        citas.lockOverrides.put("medico:10", Optional.empty());
         ValidationException missing = invalid(input(10L, 21L, TODAY.toString(), "10:00", "x"));
         assertEquals(Validation.NOT_EXISTS, missing.errors().get("idMedico"));
         citas.lockOverrides.clear();
@@ -223,7 +214,6 @@ class CitaServiceTest {
             () -> service.reschedule(1, input(10L, 20L, TODAY.toString(), "09:15", "collide")));
         assertEquals(CitaService.MEDICO_OVERLAP, ex.errors().get("hora"));
 
-        // to another medico whose 10:00 tomorrow is taken by cita 3
         ValidationException other = assertThrows(ValidationException.class,
             () -> service.reschedule(1, input(11L, 20L, TOMORROW.toString(), "10:15", "other medico")));
         assertEquals(CitaService.MEDICO_OVERLAP, other.errors().get("hora"));
@@ -238,13 +228,11 @@ class CitaServiceTest {
         assertEquals(CitaService.BAD_MINUTE, step.errors().get("hora"));
     }
 
-    // ------------------------------------------------------------ create: validation
-
     @Test
     void pastDatesAreRejected() {
         assertEquals(CitaService.PAST, invalid(input(10L, 21L, TODAY.toString(), "07:30", "x")).errors().get("fecha"));
         assertEquals(CitaService.PAST, invalid(input(10L, 21L, "2026-10-26", "10:00", "x")).errors().get("fecha"));
-        service.create(input(10L, 21L, TODAY.toString(), "08:00", "now is fine")); // 08:00 == now
+        service.create(input(10L, 21L, TODAY.toString(), "08:00", "now is fine"));
     }
 
     @Test
@@ -294,8 +282,6 @@ class CitaServiceTest {
         assertEquals("Carlos Garcia", created.medicoNombre());
     }
 
-    // ------------------------------------------------------------ state guards
-
     @Test
     void onlyProgramadaCanBeCancelledOrRescheduled() {
         CitaView cancelled = service.cancel(1);
@@ -309,8 +295,6 @@ class CitaServiceTest {
         }
         assertThrows(NotFoundException.class, () -> service.cancel(999));
     }
-
-    // ------------------------------------------------------------ roles and scope
 
     @Test
     void medicoAndPacienteAreReadOnly() {
@@ -344,7 +328,6 @@ class CitaServiceTest {
 
     @Test
     void scopeWorksForIdsAboveTheLongCache() {
-        // ids above 127 are not cached: comparing boxed Longs with == would deny access here
         medicos.add(new Medico(1010L, "9001", "Big", "Id", "Medicina General", null, null, true));
         pacientes.add(new Paciente(2020L, "9002", "Big", "Patient", LocalDate.of(1990, 1, 1), "F",
             null, null, null, true));
@@ -374,21 +357,17 @@ class CitaServiceTest {
         assertEquals(5, service.list(CitaFilter.NONE, 1, 10).total());
         assertEquals(3, service.list(new CitaFilter(null, TODAY, null, null, null), 1, 10).total());
         assertEquals(3, service.list(new CitaFilter(null, null, null, null, CitaRango.HOY), 1, 10).total());
-        // now is 08:00: 09:00 today, 16:00 today (cancelled but still listed) and tomorrow are future
         assertEquals(3, service.list(new CitaFilter(null, null, null, null, CitaRango.FUTURAS), 1, 10).total());
         assertEquals(2, service.list(new CitaFilter(null, null, null, null, CitaRango.PASADAS), 1, 10).total());
         assertEquals(4, service.list(new CitaFilter(null, null, null, null, CitaRango.HOY_Y_FUTURAS), 1, 10).total());
         assertEquals(2, service.list(new CitaFilter(null, null, EstadoCita.CANCELADA, null, null), 1, 10).total());
         assertEquals(1, service.list(new CitaFilter(null, null, null, 11L, null), 1, 10).total());
-        assertEquals(2, service.list(new CitaFilter("torres", null, null, null, null), 1, 10).total()); // citas 1 and 4
+        assertEquals(2, service.list(new CitaFilter("torres", null, null, null, null), 1, 10).total());
         assertEquals(1, service.list(new CitaFilter("2002", null, null, 11L, null), 1, 10).total());
-        // an explicit day wins over the range preset
         assertEquals(1, service.list(new CitaFilter(null, TODAY.minusDays(1), null, null, CitaRango.FUTURAS), 1, 10).total());
         Page<CitaView> ordered = service.list(CitaFilter.NONE, 1, 10);
         assertEquals(4L, ordered.items().get(0).cita().id(), "ordered by fecha_hora");
     }
-
-    // ------------------------------------------------------------ agenda
 
     @Test
     void agendaGridOccupancyAndExtraSlots() {
@@ -400,11 +379,10 @@ class CitaServiceTest {
 
         Agenda garcia = service.agenda(10L, TODAY);
         assertEquals(24, garcia.slots().size(), "cancelled 16:00 frees its slot");
-        assertEquals(1L, garcia.slots().get(4).citas().get(0).cita().id()); // 09:00 is the 5th slot
-        assertEquals(2L, garcia.slots().get(0).citas().get(0).cita().id()); // 07:00 finalizada still shown
-        assertTrue(garcia.slots().get(18).citas().isEmpty());                       // 16:00 free (cancelled)
+        assertEquals(1L, garcia.slots().get(4).citas().get(0).cita().id());
+        assertEquals(2L, garcia.slots().get(0).citas().get(0).cita().id());
+        assertTrue(garcia.slots().get(18).citas().isEmpty());
 
-        // 09:15 (another medico's patient, different paciente) lands in the 09:00 slot together with cita 1
         citas.add(new Cita(50L, 10L, 21L, at(TODAY, 9, 15), "Intercalada", EstadoCita.PROGRAMADA, null, null, null));
         citas.add(new Cita(51L, 10L, 22L, at(TODAY, 9, 0), "Mismo inicio", EstadoCita.EN_CURSO, null, null, null));
         citas.add(new Cita(52L, 10L, 20L, at(TODAY, 20, 0), "Fuera de horario", EstadoCita.PROGRAMADA, null, null, null));
@@ -431,8 +409,6 @@ class CitaServiceTest {
         ValidationException ex = assertThrows(ValidationException.class, () -> service.agenda(null, TODAY));
         assertEquals(Validation.REQUIRED, ex.errors().get("idMedico"));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportAppliesTheRoleScopeOfTheList() {

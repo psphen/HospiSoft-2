@@ -11,15 +11,6 @@ import com.hospisoft.model.Rol;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/**
- * Medicamento use cases. ADMIN has full CRUD; MEDICO and PACIENTE are read-only (stock lookup).
- * Deleting a medicamento referenced by a receta deactivates it instead.
- *
- * <p>Business rules beyond the schema: {@code presentacion} is required here although the column
- * is nullable. Updates are protected against lost stock changes: the client must send the stock it
- * loaded ({@code stockExpected}); if the row's stock differs the update is rejected with
- * {@link ConflictException} and the client reloads. Every successful write is recorded in the audit log.
- */
 public final class MedicamentoService {
 
     static final int MAX_CODIGO = 20;
@@ -47,7 +38,6 @@ public final class MedicamentoService {
         return medicamentos.findPage(safe, page, pageSize);
     }
 
-    /** Every row {@link #list} would page through (same permission), up to the export cap. */
     public ExportRows<Medicamento> listForExport(MedicamentoFilter filter) {
         return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
     }
@@ -57,12 +47,6 @@ public final class MedicamentoService {
         return medicamentos.findById(id).orElseThrow(() -> new NotFoundException("Medicamento " + id + " not found"));
     }
 
-    /**
-     * Insert when the id is null or 0, update otherwise (update requires {@code stockExpected}).
-     *
-     * @param activo null keeps the stored value on update (true on insert); otherwise the new value
-     * @throws ConflictException when the stored stock differs from {@code stockExpected}
-     */
     public Medicamento save(MedicamentoInput input, Boolean activo) {
         access.require(Rol.ADMIN);
         Long id = input.id() == null || input.id() == 0 ? null : input.id();
@@ -99,7 +83,6 @@ public final class MedicamentoService {
         return outcome;
     }
 
-    /** Audit text, e.g. "Medicamento MED-001 - Acetaminofen 500 mg". */
     private static String detalle(Medicamento m) {
         return "Medicamento " + m.codigo() + " - " + m.nombre();
     }

@@ -1,19 +1,3 @@
-/*
- * View glue shared by every page.
- * Business logic lives in Java; this file only calls the bridge (window.app) and updates the DOM.
- *
- * Bridge contract: every method takes and returns JSON strings.
- *   success: {"ok":true,"data":...}
- *   failure: {"ok":false,"code":"...","message":"..."}
- *
- * Two calling styles:
- *   HospiSoft.call(method, ...args)      synchronous, for in-memory methods (getSession, logout, navigate,
- *                                        getAllowedPages, cached getStartupStatus)
- *   HospiSoft.appCall(method, payload[, {timeoutMs}])
- *                                        asynchronous (Promise), for anything that touches the database
- *                                        (login, fresh getStartupStatus). Java answers later through
- *                                        window.__hospisoft.resolve(requestId, envelopeJson).
- */
 (function () {
   'use strict';
 
@@ -37,7 +21,6 @@
     main.insertBefore(banner, main.firstChild);
   }
 
-  /* Transient alert at the top of the content area (success / danger); hides itself after 4 s. */
   function showToast(kind, text) {
     var area = document.querySelector('.main-content .p-4') || document.querySelector('.main-content');
     if (!area) {
@@ -62,7 +45,6 @@
     return response;
   }
 
-  /* Calls a bridge method synchronously and always returns an envelope object, never throws. */
   function call(method) {
     var args = Array.prototype.slice.call(arguments, 1);
     if (!window.app) {
@@ -83,7 +65,6 @@
     return inspect(response);
   }
 
-  /* Receives asynchronous results from Java. */
   window.__hospisoft = {
     resolve: function (requestId, envelopeJson) {
       var entry = pending[requestId];
@@ -102,12 +83,6 @@
     }
   };
 
-  /*
-   * Asynchronous bridge call. Resolves with the envelope; rejects with an Error (code TIMEOUT)
-   * when Java does not answer within ASYNC_TIMEOUT_MS (or options.timeoutMs when given, e.g. for
-   * exports that wait on a save dialog), or with code NO_BRIDGE / BAD_REQUEST when the request
-   * could not even be queued.
-   */
   function appCall(method, payload, options) {
     var timeoutMs = options && options.timeoutMs > 0 ? options.timeoutMs : ASYNC_TIMEOUT_MS;
     return new Promise(function (resolve, reject) {
@@ -132,7 +107,6 @@
     });
   }
 
-  /* Runs fn once the bridge is injected (or immediately when it already is). */
   function onReady(fn) {
     if (window.app) {
       fn();
@@ -141,7 +115,6 @@
     }
   }
 
-  /* Cosmetic only: hides sidebar links the role may not open. Java enforces the same rule. */
   function applyRoleNavigation() {
     var response = call('getAllowedPages');
     if (!response.ok || !response.data) {
@@ -183,7 +156,6 @@
     });
   }
 
-  /* Diagnostic only: proves the vendored assets resolved (visible in the Java console). */
   function logAssetDiagnostics() {
     try {
       var root = getComputedStyle(document.documentElement);

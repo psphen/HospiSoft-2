@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Parses the generated PDF with OpenPDF and checks page format, text and pagination. */
 class PdfExporterTest {
 
     private static String text(PdfReader reader, int page) throws IOException {
@@ -58,7 +57,6 @@ class PdfExporterTest {
             for (int p = 1; p <= pages; p++) {
                 String page = text(reader, p);
                 assertTrue(page.contains("Código") && page.contains("Descripción"), "header missing on page " + p);
-                // the total ("de Y") is a form XObject filled at close, which the text extractor does not read
                 assertTrue(page.contains("Página " + p + " de"), "page number missing on page " + p + ": " + page);
             }
             assertTrue(text(reader, pages).contains("Fila número 200"));

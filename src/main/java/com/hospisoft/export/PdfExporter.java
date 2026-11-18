@@ -21,14 +21,6 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.util.List;
 
-/**
- * Writes a {@link TableExport} as an A4 landscape PDF with OpenPDF: title, subtitle, then the table
- * with its header row repeated on every page and "Página X de Y" in the footer.
- *
- * <p>Text uses the standard Helvetica font with the Windows-1252 encoding: every PDF viewer ships
- * it (nothing to embed or license) and it covers Spanish accents, ñ, ü, ¿ and ¡. Characters
- * outside that encoding (e.g. emoji) are not representable and are dropped.
- */
 public final class PdfExporter {
 
     static final String NO_ROWS = "Sin registros para exportar";
@@ -130,7 +122,6 @@ public final class PdfExporter {
         return array;
     }
 
-    /** Footer "Página X de Y": Y is a template filled in once the document is complete. */
     private static final class PageNumbers extends PdfPageEventHelper {
 
         private final BaseFont font;

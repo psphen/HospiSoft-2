@@ -7,13 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Verifies that the required tables exist in schema public. The application never creates
- * the schema; the user runs db/schema.sql manually in the Supabase SQL Editor.
- */
 public final class SchemaChecker {
-
-    /** The seven domain tables plus the audit log, in db/schema.sql order. */
     public static final List<String> REQUIRED_TABLES = List.of(
         "usuario", "medico", "paciente", "cita", "medicamento", "historia_clinica", "receta", "auditoria");
 
@@ -26,7 +20,6 @@ public final class SchemaChecker {
         this.pool = pool;
     }
 
-    /** Pure part: which required tables are absent from the given set (case-insensitive). */
     public static List<String> missingFrom(Set<String> foundTables) {
         Set<String> normalized = new HashSet<>();
         for (String name : foundTables) {
@@ -41,10 +34,6 @@ public final class SchemaChecker {
         return missing;
     }
 
-    /**
-     * Queries information_schema. SQLExceptions propagate to the pool, which classifies them
-     * ({@link DatabaseUnavailableException}, {@link DatabaseAuthException} or internal error).
-     */
     public List<String> findMissing() {
         return pool.withConnection(connection -> {
             Set<String> found = new HashSet<>();

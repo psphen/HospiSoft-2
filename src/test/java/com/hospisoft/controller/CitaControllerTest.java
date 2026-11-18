@@ -44,12 +44,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** End-to-end cita methods through the async bridge with in-memory repositories (fixed clock and zone). */
 class CitaControllerTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final AppZone ZONE = new AppZone(BOGOTA);
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-27T13:00:00Z"), BOGOTA); // 08:00 local
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-27T13:00:00Z"), BOGOTA);
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 27);
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
     private static final SessionContext GARCIA = new SessionContext(2, "dr.garcia", Rol.MEDICO, 10L, "Carlos Garcia");
@@ -228,8 +227,6 @@ class CitaControllerTest {
         sessions.clear();
         assertEquals("FORBIDDEN", invoke("listCitas", "{}").get("code"));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportWritesLocalDatesAndEstadoLabels() throws Exception {

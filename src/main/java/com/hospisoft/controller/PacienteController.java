@@ -13,21 +13,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-/**
- * MVC controller of the paciente module: receives the View's request from the JS bridge, parses
- * the payload, delegates to {@link PacienteService} (the Model) and returns the DTO (which carries
- * the age computed against the service's {@code today()}).
- *
- * <p>Payloads:
- * <ul>
- *   <li>listPacientes: {@code {"filter":{"sexo","activo","texto"},"page":1,"pageSize":10}} ->
- *       {@code {"items":[dto],"total":N,"page":P,"pageSize":S,"totalPages":T}}</li>
- *   <li>getPaciente / deletePaciente: {@code {"id":5}} -> dto / {@code {"outcome":"DELETED|DEACTIVATED"}}</li>
- *   <li>savePaciente: the dto (insert when id is missing or 0; {@code activo} optional: true on insert,
- *       unchanged on update when omitted) -> the stored dto</li>
- *   <li>exportPacientes: {@code {"filter":{...as listPacientes...},"format":"xlsx|pdf"}} -> see {@link Exports}</li>
- * </ul>
- */
 public final class PacienteController implements Controller {
 
     static final ExportSpec EXPORT = new ExportSpec(ModuloAuditoria.PACIENTE, "pacientes", "Listado de Pacientes",

@@ -22,11 +22,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class AuthServiceTest {
-
-    /** In-memory fake: no database involved. */
     static final class FakeUsuarioRepository implements UsuarioRepository {
         private final Map<String, Usuario> byUsername = new HashMap<>();
-        /** Mirrors the DAO rule: the linked medico/paciente row must be active too. */
         private final Map<String, Boolean> linkedActivo = new HashMap<>();
 
         void add(Usuario usuario) {
@@ -49,7 +46,6 @@ class AuthServiceTest {
         }
     }
 
-    // PBKDF2 with the production iteration count is slow: hash the fixtures once per class.
     private static Usuario admin;
     private static Usuario medico;
     private static Usuario inactivo;
@@ -84,8 +80,6 @@ class AuthServiceTest {
         service = new AuthService(repository, throttle, audit);
     }
 
-    // ------------------------------------------------------------ audit
-
     @Test
     void successfulLoginIsAuditedForTheNewSession() {
         SessionContext session = service.login(" dr.garcia ", "Medico123*".toCharArray());
@@ -111,7 +105,6 @@ class AuthServiceTest {
         }
     }
 
-    /** A user who types the password into the username box must not get it stored forever. */
     @Test
     void anUnknownUsernameIsNeverStored() {
         assertThrows(AuthenticationException.class, () -> service.login("Medico123*", "whatever".toCharArray()));
@@ -275,6 +268,6 @@ class AuthServiceTest {
         for (int i = 0; i < LoginThrottle.MAX_FAILURES - 1; i++) {
             assertThrows(AuthenticationException.class, () -> service.login("admin", "wrong".toCharArray()));
         }
-        service.login("admin", "Admin123*".toCharArray()); // still not locked
+        service.login("admin", "Admin123*".toCharArray());
     }
 }

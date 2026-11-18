@@ -6,19 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Single source of truth for which page each role may open. Used by the Java navigation guard,
- * by Bridge.navigate and (through Bridge.getAllowedPages) by the sidebar link hiding in app.js.
- */
 public final class PageAccess {
 
     public static final String LOGIN_PAGE = "login.html";
     public static final String HOME_PAGE = "index.html";
 
-    /** The audit log: read-only and ADMIN only. */
     public static final String AUDITORIA_PAGE = "auditoria.html";
 
-    /** Every page shipped in the classpath web/ folder, in sidebar order. */
     public static final List<String> PAGES = List.of(
         LOGIN_PAGE, HOME_PAGE, "medicos.html", "pacientes.html", "citas.html", "medicamentos.html", AUDITORIA_PAGE);
 
@@ -38,7 +32,6 @@ public final class PageAccess {
         return page != null && PAGES.contains(page);
     }
 
-    /** Pages (login excluded) the role may open; empty list for a null role. */
     public static List<String> allowedPages(Rol rol) {
         if (rol == null) {
             return List.of();
@@ -46,7 +39,6 @@ public final class PageAccess {
         return ROLE_PAGES.getOrDefault(rol, List.of());
     }
 
-    /** Login is always reachable; every other page needs a role that lists it. */
     public static boolean isAllowed(String page, Rol rol) {
         if (LOGIN_PAGE.equals(page)) {
             return true;

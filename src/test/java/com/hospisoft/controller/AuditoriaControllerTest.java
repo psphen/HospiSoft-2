@@ -36,12 +36,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** The audit list through the async bridge with the in-memory repository (no database). */
 class AuditoriaControllerTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
     private static final SessionContext MEDICO = new SessionContext(2, "dr.garcia", Rol.MEDICO, 10L, "Carlos Garcia");
-    /** 2026-11-04 10:00:05 in Bogota (UTC-5). */
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-04T15:00:05Z"), ZoneOffset.UTC);
     private static final AppZone ZONE = new AppZone(ZoneId.of("America/Bogota"));
     private static final UsuarioRepository NO_USERS = username -> Optional.empty();
@@ -171,8 +169,6 @@ class AuditoriaControllerTest {
         sessions.clear();
         assertEquals("FORBIDDEN", invoke("listAuditoria", "{}").get("code"));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportWritesTheFilteredLogNewestFirst() throws Exception {

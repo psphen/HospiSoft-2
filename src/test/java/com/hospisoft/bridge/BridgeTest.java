@@ -51,7 +51,6 @@ class BridgeTest {
         throw new DatabaseAuthException("password authentication failed", null);
     };
 
-    /** Captures scripts the bridge wants to run in the page. */
     static final class FakeSink implements Bridge.ScriptSink {
         final List<String> scripts = new ArrayList<>();
         final CountDownLatch latch = new CountDownLatch(1);
@@ -88,7 +87,7 @@ class BridgeTest {
 
             @Override
             public boolean exists(String page) {
-                return !"citas.html".equals(page); // simulate one missing resource
+                return !"citas.html".equals(page);
             }
         };
         Bridge bridge = new Bridge(new AuthService(repository), sessions, probe, navigator, sink);
@@ -101,7 +100,6 @@ class BridgeTest {
         created.forEach(Bridge::shutdown);
     }
 
-    /** Extracts the envelope from {@code if (window.__hospisoft) { window.__hospisoft.resolve("id", "json"); }}. */
     private static Map<String, Object> envelopeOf(String script, String expectedRequestId) {
         String prefix = "if (window.__hospisoft) { window.__hospisoft.resolve(";
         String suffix = "); }";
@@ -118,8 +116,6 @@ class BridgeTest {
         Map<String, Object> login = Json.parseObject(bridge.login("{\"username\":\"admin\",\"password\":\"Admin123*\"}"));
         assertEquals(true, login.get("ok"));
     }
-
-    // ------------------------------------------------------------ sync envelope
 
     @Test
     void loginWithMalformedJsonReturnsBadRequestEnvelope() {
@@ -309,8 +305,6 @@ class BridgeTest {
         assertFalse(((String) response.get("message")).contains("enum"));
     }
 
-    // ------------------------------------------------------------ navigation and roles
-
     @Test
     void navigateDelegatesToNavigatorAndRejectsUnknownPages() {
         Bridge bridge = bridge(WORKING_REPOSITORY);
@@ -367,8 +361,6 @@ class BridgeTest {
         assertEquals(6, all.size());
         assertTrue(all.contains("auditoria.html"), "the audit log is an ADMIN page");
     }
-
-    // ------------------------------------------------------------ async path
 
     @Test
     void asyncCallWithUnknownMethodResolvesWithBadRequest() throws InterruptedException {
@@ -441,8 +433,6 @@ class BridgeTest {
         bridge.shutdown();
         assertEquals("INTERNAL_ERROR", Json.parseObject(bridge.call("r9", "login", "{}")).get("code"));
     }
-
-    // ------------------------------------------------------------ log
 
     @Test
     void logNeverThrows() {

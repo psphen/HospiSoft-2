@@ -8,12 +8,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 
-/**
- * JDBC implementation of {@link UsuarioRepository}. PreparedStatement only, never string concatenation.
- *
- * <p>The effective {@code activo} flag also requires the linked medico/paciente row to be active:
- * a deactivated professional or patient cannot log in even if the account itself is still active.
- */
 public final class UsuarioDao implements UsuarioRepository {
 
     static final String FIND_BY_USERNAME = """

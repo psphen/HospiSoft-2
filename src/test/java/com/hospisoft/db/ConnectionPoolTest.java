@@ -18,8 +18,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class ConnectionPoolTest {
-
-    /** Fake connection: only the methods the pool touches are meaningful. */
     static final class FakeConnection {
         final AtomicBoolean valid = new AtomicBoolean(true);
         final AtomicBoolean closed = new AtomicBoolean(false);
@@ -71,7 +69,6 @@ class ConnectionPoolTest {
 
     private final FakeFactory factory = new FakeFactory();
     private final AtomicLong now = new AtomicLong(1_000_000);
-    /** Milliseconds the fake clock advances on every read; non-zero makes borrow deadlines expire. */
     private final AtomicLong tick = new AtomicLong(0);
 
     private ConnectionPool pool(int size, long waitMillis) {
@@ -85,7 +82,7 @@ class ConnectionPoolTest {
         Connection b = pool.borrow();
         assertNotSame(a, b);
         assertEquals(2, pool.inUse());
-        tick.set(30); // each clock read moves time forward so the 50 ms deadline expires
+        tick.set(30);
         assertThrows(DatabaseUnavailableException.class, pool::borrow);
         tick.set(0);
         assertEquals(2, factory.calls.get());
@@ -115,7 +112,7 @@ class ConnectionPoolTest {
         }));
         assertEquals(0, pool.inUse());
         assertEquals(1, pool.idleCount());
-        pool.withConnection(c -> 1); // reuses the same connection
+        pool.withConnection(c -> 1);
         assertEquals(1, factory.calls.get());
     }
 
@@ -215,7 +212,6 @@ class ConnectionPoolTest {
             }
         });
         assertEquals(1, result);
-        // a fresh connection is first put in autocommit mode by the pool
         assertEquals(List.of("setAutoCommit(true)", "setAutoCommit(false)", "commit", "setAutoCommit(true)"), jdbc.events);
         assertEquals(0, pool.inUse());
         assertEquals(1, pool.idleCount());

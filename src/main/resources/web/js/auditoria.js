@@ -1,7 +1,3 @@
-/*
- * Auditoria page: read-only list of the audit log with filters and pagination (ADMIN only; the
- * Java guard and the service enforce it). Rows arrive display-ready (labels and local date) from Java.
- */
 (function () {
   'use strict';
 
@@ -10,7 +6,6 @@
   var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   var BAD_DATE = 'Use el formato AAAA-MM-DD';
 
-  /* Badge colour per action family (cosmetic only). */
   var ACCION_CLASS = {
     CREAR: 'bg-success',
     EDITAR: 'bg-primary',
@@ -46,7 +41,6 @@
     };
   }
 
-  /* Returns an error text when a date box holds something that is not AAAA-MM-DD. */
   function dateProblem(filter) {
     if ((filter.desde && !ISO_DATE.test(filter.desde)) || (filter.hasta && !ISO_DATE.test(filter.hasta))) {
       return BAD_DATE;
@@ -67,7 +61,7 @@
     window.HospiSoft.appCall('listAuditoria', { filter: filter, page: page, pageSize: crud.PAGE_SIZE })
       .then(function (response) {
         if (!crud.isCurrent('list', token)) {
-          return; // a newer request already answered
+          return;
         }
         if (!response.ok) {
           var message = response.code === 'VALIDATION' && response.errors && response.errors.hasta
@@ -117,7 +111,6 @@
       + '</tr>';
   }
 
-  /* JavaFX WebKit may render type="date" as a plain text box: keep the ISO placeholder usable. */
   function prepareDateInputs() {
     [desdeInput, hastaInput].forEach(function (input) {
       if (input.type !== 'date') {
@@ -143,7 +136,6 @@
 
   bind();
   prepareDateInputs();
-  /* Filter for an export: the same date check as the list, null (no export) when it fails. */
   function exportFilter() {
     crud.hideModalAlert(filterAlert);
     var filter = currentFilter();

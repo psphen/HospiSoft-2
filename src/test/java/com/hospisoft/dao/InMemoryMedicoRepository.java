@@ -13,7 +13,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** In-memory fake mirroring the DAO semantics (filters, ordering, paging) for service and bridge tests. */
 public final class InMemoryMedicoRepository implements MedicoRepository {
 
     private final Map<Long, Medico> rows = new LinkedHashMap<>();
@@ -34,12 +33,10 @@ public final class InMemoryMedicoRepository implements MedicoRepository {
         withHistory.add(id);
     }
 
-    /** Overwrites a row (no validation), for tests that deactivate a medico mid-flight. */
     public void replace(Medico medico) {
         rows.put(medico.id(), medico);
     }
 
-    /** Simulates a FOREIGN KEY violation on the next physical delete of the row. */
     public void failDeleteWithHistory(long id) {
         failDeleteWithHistory.add(id);
     }

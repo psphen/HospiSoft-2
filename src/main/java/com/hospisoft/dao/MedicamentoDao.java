@@ -13,11 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * JDBC implementation of {@link MedicamentoRepository}. PreparedStatement only; the WHERE clause is
- * assembled from constant fragments (the stock state is a fixed SQL expression per enum value).
- * Constraint violations are translated like in {@link MedicoDao}.
- */
 public final class MedicamentoDao implements MedicamentoRepository {
 
     static final String COLUMNS = "id, codigo, nombre, descripcion, presentacion, stock, stock_minimo, activo";
@@ -32,7 +27,6 @@ public final class MedicamentoDao implements MedicamentoRepository {
         RETURNING id
         """;
 
-    /** Optimistic concurrency on stock: the row must still hold the stock the client loaded. */
     static final String UPDATE = """
         UPDATE medicamento
         SET codigo = ?, nombre = ?, descripcion = ?, presentacion = ?, stock = ?, stock_minimo = ?, activo = ?
@@ -68,7 +62,6 @@ public final class MedicamentoDao implements MedicamentoRepository {
         this.pool = pool;
     }
 
-    /** Constant SQL fragment for a stock state (no parameters). */
     static String stateClause(StockState state) {
         return switch (state) {
             case AGOTADO -> STATE_AGOTADO;
@@ -166,7 +159,6 @@ public final class MedicamentoDao implements MedicamentoRepository {
                 throw rethrow(ex, duplicateCodigo(ex));
             }
             if (affected == 0) {
-                // same connection: a nested pool call could exhaust a one-connection pool
                 try (PreparedStatement ps = connection.prepareStatement(EXISTS_BY_ID)) {
                     ps.setLong(1, medicamento.id());
                     try (ResultSet rs = ps.executeQuery()) {
@@ -243,8 +235,6 @@ public final class MedicamentoDao implements MedicamentoRepository {
         });
     }
 
-    // ------------------------------------------------------------ helpers
-
     private static RuntimeException duplicateCodigo(SQLException ex) {
         return DaoSupport.duplicateKey(ex, "codigo");
     }
@@ -265,7 +255,6 @@ public final class MedicamentoDao implements MedicamentoRepository {
         }
     }
 
-    /** Binds the seven entity columns starting at index 1; returns the next free index. */
     private static int bindEntity(PreparedStatement ps, Medicamento m) throws SQLException {
         ps.setString(1, m.codigo());
         ps.setString(2, m.nombre());

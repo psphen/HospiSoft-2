@@ -12,19 +12,9 @@ import javafx.application.Platform;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
-/**
- * JavaFX "save as" dialog owned by the main window (so it is modal and centred on it).
- *
- * <p>Export methods run on the bridge's background thread, but a FileChooser may only be shown on
- * the JavaFX application thread: {@link #choose} hands the dialog to {@code Platform.runLater} and
- * blocks the bridge thread on a {@link CompletableFuture} until the user answers. The FX thread
- * never waits for the bridge, so this cannot deadlock; the page keeps its promise pending (with
- * the long export timeout) while the dialog is open.
- */
 public final class FxFileSaver implements FileSaver {
 
     private final Supplier<Window> owner;
-    /** Folder of the last saved file, reused for the next export; touched on the FX thread only. */
     private File lastDirectory;
 
     public FxFileSaver(Supplier<Window> owner) {
@@ -47,7 +37,7 @@ public final class FxFileSaver implements FileSaver {
         try {
             return answer.get();
         } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt(); // the bridge is shutting down: treat as cancelled
+            Thread.currentThread().interrupt();
             return Optional.empty();
         } catch (ExecutionException ex) {
             throw new IllegalStateException("save dialog failed", ex.getCause());
@@ -74,10 +64,6 @@ public final class FxFileSaver implements FileSaver {
         return Optional.of(chosen.toPath());
     }
 
-    /**
-     * Folder the dialog opens in: the last one used while it still exists, else ~/Documents, else
-     * the home folder; null (the platform default) when none of them exists.
-     */
     static File initialDirectory(File last, String userHome) {
         if (last != null && last.isDirectory()) {
             return last;

@@ -12,7 +12,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/** Every service max-length constant must fit the VARCHAR(n) of the column it protects. */
 class SchemaLengthParityTest {
 
     private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE IF NOT EXISTS (\\w+) \\((.*?)\\n\\);", Pattern.DOTALL);
@@ -32,7 +31,6 @@ class SchemaLengthParityTest {
         return lengths;
     }
 
-    /** TEXT columns are unbounded: these constants are business limits, so only their column must exist. */
     @Test
     void textColumnConstantsAreBusinessLimits() throws IOException {
         String sql = Files.readString(Paths.get("db", "schema.sql"), StandardCharsets.UTF_8);

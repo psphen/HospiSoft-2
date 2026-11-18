@@ -12,14 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/**
- * Builds the dashboard for the current session. Every number is scoped by role: ADMIN sees the
- * whole hospital, a MEDICO only its own citas and patients, a PACIENTE only its own records.
- * "Hoy" is the local day of {@link AppZone}, with the bounds computed here and passed as parameters.
- */
 public final class DashboardService {
-
-    /** How many upcoming citas the panel lists. */
     public static final int PROXIMAS_LIMIT = 5;
 
     private final DashboardRepository dashboard;
@@ -74,7 +67,6 @@ public final class DashboardService {
                 new DashboardView.Kpi("citas", "Mis órdenes", snapshot.recetasTotales(), "medicamentos"),
                 new DashboardView.Kpi("medicamentos", "Historias", snapshot.historiasTotales(), "clínicas"));
         };
-        // the share is over the citas that still counted as work today: cancelled ones are excluded
         long base = snapshot.resumenHoy().noCanceladas();
         Double atendidasPct = base == 0 ? null : (100.0 * snapshot.resumenHoy().atendidas()) / base;
         return new DashboardView(current.rol(), kpis, snapshot.proximasCitas(), snapshot.resumenHoy(),

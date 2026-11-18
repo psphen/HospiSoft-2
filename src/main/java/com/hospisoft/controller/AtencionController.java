@@ -17,26 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * MVC controller of the attention module: receives the View's request from the JS bridge, parses
- * the payload, delegates to {@link AtencionService} (the Model) and returns the DTO.
- *
- * <p>Payloads:
- * <ul>
- *   <li>iniciarAtencion {@code {"idCita":N}} -> cita dto (MEDICO, own cita, PROGRAMADA)</li>
- *   <li>finalizarAtencion {@code {"idCita","diagnostico","tratamiento","notas","observaciones",
- *       "recetas":[{"idMedicamento","cantidad","dosis","duracion","observacionNoDisponible"}]}} ->
- *       {@code {"idHistoria","cita":citaDto,"recetas":[recetaDto]}}</li>
- *   <li>getHistoriaCita {@code {"idCita"}} -> historia dto</li>
- *   <li>historialPaciente {@code {"idPaciente","page","pageSize"}} -> page of historia dtos (no recetas)</li>
- *   <li>misRecetas {@code {"page","pageSize"}} -> page of receta dtos with {@code fecha} (PACIENTE)</li>
- *   <li>medicamentosParaRecetar {@code {}} -> {@code [{id, codigo, nombre, presentacion, stock}]}</li>
- * </ul>
- *
- * <p>Error codes beyond the common ones: VALIDATION (field messages, including
- * {@code recetas[i].<field>}), NOT_FOUND (missing or out of scope), CONFLICT (the cita left its
- * expected state, or the attention was already closed).
- */
 public final class AtencionController implements Controller {
 
     private final AtencionService atenciones;

@@ -31,7 +31,6 @@ class DashboardServiceTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final AppZone ZONE = new AppZone(BOGOTA);
-    /** 2026-10-27 08:00 local. */
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-27T13:00:00Z"), BOGOTA);
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 27);
 
@@ -66,8 +65,6 @@ class DashboardServiceTest {
         medicamentos.add(new Medicamento(6L, "MED-005", "Loratadina", null, "Caja", 2, 15, true));
         medicamentos.add(new Medicamento(7L, "MED-010", "Diclofenaco", null, "Tubo", 50, 10, false));
         citas = new InMemoryCitaRepository(medicos, pacientes);
-        // today: garcia 07:00 FINALIZADA (20 min), garcia 09:00 PROGRAMADA, garcia 16:00 CANCELADA,
-        //        lopez 10:00 PROGRAMADA; tomorrow: garcia 09:00 PROGRAMADA
         citas.add(new Cita(1L, 10L, 21L, at(TODAY, 7, 0), "Gripe", EstadoCita.FINALIZADA,
             at(TODAY, 7, 0), at(TODAY, 7, 20), null));
         citas.add(new Cita(2L, 10L, 20L, at(TODAY, 9, 0), "Control", EstadoCita.PROGRAMADA, null, null, null));
@@ -98,10 +95,8 @@ class DashboardServiceTest {
         assertEquals(0, view.resumenHoy().enCurso());
         assertEquals(2, view.resumenHoy().pendientes());
         assertEquals(1, view.resumenHoy().canceladas());
-        // 1 of the 3 citas that were not cancelled, never 1 of 4
         assertEquals(100.0 / 3, view.atendidasPct(), 1e-9);
         assertEquals(20.0, view.duracionPromedioMin());
-        // upcoming: today 09:00 and 10:00 plus tomorrow 09:00; the cancelled one never shows
         assertEquals(List.of(2L, 4L, 5L), view.proximasCitas().stream().map(c -> c.cita().id()).toList());
     }
 
@@ -112,7 +107,6 @@ class DashboardServiceTest {
         assertEquals(Rol.MEDICO, view.rol());
         assertEquals(List.of("Mis pacientes", "Citas de hoy", "Citas pendientes", "Medicamentos"),
             view.kpis().stream().map(DashboardView.Kpi::etiqueta).toList());
-        // two distinct patients with a non-cancelled cita, 3 citas today, 2 upcoming scheduled, 1 low stock
         assertEquals(List.of(2L, 3L, 2L, 1L), view.kpis().stream().map(DashboardView.Kpi::valor).toList());
         assertEquals("con citas", view.kpis().get(0).detalle(), "a cita is not an attention");
         assertEquals("en o bajo el mínimo", view.kpis().get(3).detalle(), "the count includes stock = minimo");
@@ -131,7 +125,6 @@ class DashboardServiceTest {
         assertEquals(Rol.PACIENTE, view.rol());
         assertEquals(List.of("Mis citas", "Citas próximas", "Mis órdenes", "Historias"),
             view.kpis().stream().map(DashboardView.Kpi::etiqueta).toList());
-        // 4 citas in total (one cancelled); 2 still scheduled ahead (today 10:00 and tomorrow 09:00)
         assertEquals(List.of(4L, 2L, 0L, 0L), view.kpis().stream().map(DashboardView.Kpi::valor).toList());
         assertEquals(3, view.resumenHoy().total());
         assertEquals(1, view.resumenHoy().atendidas());
@@ -142,7 +135,6 @@ class DashboardServiceTest {
     @Test
     void anEmptyDayReportsZerosAndNullAverages() {
         current = new SessionContext(9, "paciente.sin.citas", Rol.PACIENTE, 20L, "Maria Torres");
-        // maria only has the 09:00 cita today, so move it away to empty her day
         citas.replace(new Cita(2L, 10L, 20L, at(TODAY.plusDays(5), 9, 0), "Control", EstadoCita.PROGRAMADA,
             null, null, null));
         DashboardView view = service.load();
@@ -155,7 +147,6 @@ class DashboardServiceTest {
 
     @Test
     void theAveragesCoverEveryFinishedCitaOfTheDay() {
-        // a second finished cita of 40 minutes: the average becomes 30 and the share 2 of 4
         citas.add(new Cita(6L, 10L, 20L, at(TODAY, 6, 0), "Otra", EstadoCita.FINALIZADA,
             at(TODAY, 6, 0), at(TODAY, 6, 40), null));
         DashboardView view = service.load();
@@ -204,7 +195,6 @@ class DashboardServiceTest {
 
     @Test
     void theDayWindowFollowsTheLocalCalendarNotUtc() {
-        // 02:00Z of the 28th is still 21:00 of the 27th in Bogota: the panel must not jump a day
         Clock lateNight = Clock.fixed(Instant.parse("2026-10-28T02:00:00Z"), BOGOTA);
         DashboardService atNight = new DashboardService(
             new InMemoryDashboardRepository(citas, medicos, pacientes, medicamentos, atenciones),
@@ -212,7 +202,6 @@ class DashboardServiceTest {
         DashboardView view = atNight.load();
         assertEquals(4, view.resumenHoy().total(), "the citas of the 27th still belong to today");
         assertEquals(1, view.resumenHoy().atendidas());
-        // everything scheduled earlier today is past: only tomorrow's 09:00 is still ahead
         assertEquals(List.of(5L), view.proximasCitas().stream().map(c -> c.cita().id()).toList());
     }
 

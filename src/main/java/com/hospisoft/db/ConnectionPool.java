@@ -11,30 +11,12 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.LongSupplier;
 
-/**
- * Minimal bounded JDBC connection pool (no third-party dependency).
- *
- * <p>Design rules:
- * <ul>
- *   <li>The lock only protects bookkeeping. Connecting and validating happen outside it, so a slow
- *       connect never blocks {@link #release} or other borrowers.</li>
- *   <li>A slot is reserved ({@code inUse++}) before connecting and given back if the connect fails.</li>
- *   <li>After a connect failure, borrows within {@link #FAIL_FAST_MILLIS} fail immediately.</li>
- *   <li>Connections are validated before being handed out; dead ones are dropped and replaced.</li>
- *   <li>Double {@link #release} is ignored: {@code inUse} never goes negative.</li>
- * </ul>
- * Connect failures surface as {@link DatabaseUnavailableException}, bad credentials as
- * {@link DatabaseAuthException}.
- */
 public final class ConnectionPool implements AutoCloseable {
-
-    /** Work to run with a borrowed connection. */
     @FunctionalInterface
     public interface SqlFunction<T> {
         T apply(Connection connection) throws SQLException;
     }
 
-    /** Opens physical connections. Real: JDBC DriverManager; tests: fakes. */
     @FunctionalInterface
     public interface ConnectionFactory {
         Connection open() throws SQLException;
@@ -67,7 +49,6 @@ public final class ConnectionPool implements AutoCloseable {
         this.clock = clock;
     }
 
-    /** Production pool over the PostgreSQL JDBC driver. */
     public static ConnectionPool forJdbc(String url, String user, String password, int maxSize) {
         Properties properties = new Properties();
         properties.setProperty("user", user);
@@ -80,11 +61,6 @@ public final class ConnectionPool implements AutoCloseable {
             DEFAULT_BORROW_WAIT_MILLIS, System::currentTimeMillis);
     }
 
-    /**
-     * Borrow, run, release. SQLExceptions are classified: connection problems become
-     * {@link DatabaseUnavailableException} and the connection is discarded; anything else is an
-     * {@link IllegalStateException} (internal error) and the connection goes back to the pool.
-     */
     public <T> T withConnection(SqlFunction<T> function) {
         Connection connection = borrow();
         boolean broken = false;
@@ -110,11 +86,6 @@ public final class ConnectionPool implements AutoCloseable {
         }
     }
 
-    /**
-     * Borrow, run inside a transaction (autocommit off), commit on success, roll back on any
-     * exception, always restore autocommit, release. Never call {@link #withConnection} or another
-     * {@code inTransaction} from inside {@code function}: a one-connection pool would deadlock.
-     */
     public <T> T inTransaction(SqlFunction<T> function) {
         Connection connection = borrow();
         boolean broken = false;
@@ -142,9 +113,8 @@ public final class ConnectionPool implements AutoCloseable {
             }
             throw new IllegalStateException("SQL error: " + ex.getMessage(), ex);
         } catch (Throwable ex) {
-            throw ex; // business exceptions and Errors: rolled back below, rethrown unchanged
+            throw ex;
         } finally {
-            // pgjdbc commits pending work on setAutoCommit(true): roll back FIRST when not committed
             if (!committed) {
                 try {
                     connection.rollback();
@@ -187,15 +157,14 @@ public final class ConnectionPool implements AutoCloseable {
                     }
                     continue;
                 }
-                inUse++; // slot reserved: for the idle candidate or for a connection to be opened below
+                inUse++;
             }
 
-            // Validation and connecting happen outside the lock.
             if (candidate != null) {
                 if (isAlive(candidate)) {
                     return handOut(candidate);
                 }
-                closeQuietly(candidate); // dead: the reserved slot is reused for a replacement
+                closeQuietly(candidate);
             }
             try {
                 return handOut(connect());
@@ -212,7 +181,7 @@ public final class ConnectionPool implements AutoCloseable {
         }
         synchronized (lock) {
             if (!borrowed.remove(connection)) {
-                return; // not borrowed from this pool, or released twice
+                return;
             }
             inUse--;
             if (closed) {
@@ -224,7 +193,6 @@ public final class ConnectionPool implements AutoCloseable {
         }
     }
 
-    /** Release a connection known to be broken: it is closed instead of returned to the pool. */
     public void discard(Connection connection) {
         if (connection == null) {
             return;
@@ -253,14 +221,12 @@ public final class ConnectionPool implements AutoCloseable {
         }
     }
 
-    /** Package-private, for tests. */
     int inUse() {
         synchronized (lock) {
             return inUse;
         }
     }
 
-    /** Package-private, for tests. */
     int idleCount() {
         synchronized (lock) {
             return idle.size();
@@ -318,8 +284,6 @@ public final class ConnectionPool implements AutoCloseable {
     private static void closeQuietly(Connection connection) {
         try {
             connection.close();
-        } catch (SQLException | RuntimeException ignored) {
-            // nothing useful to do with a failing close
-        }
+        } catch (SQLException | RuntimeException ignored) {}
     }
 }

@@ -10,10 +10,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
 
-/**
- * In-memory fake of the append-only audit log: stamps the date like {@code DEFAULT now()}, applies
- * the filters like the DAO (newest first) and can be told to fail every write.
- */
 public final class InMemoryAuditoriaRepository implements AuditoriaRepository {
 
     private final List<Auditoria> rows = new ArrayList<>();
@@ -26,7 +22,6 @@ public final class InMemoryAuditoriaRepository implements AuditoriaRepository {
         this.clock = clock;
     }
 
-    /** Every following insert throws the supplied exception (null restores normal behaviour). */
     public void failInserts(Supplier<RuntimeException> failure) {
         this.insertFailure = failure;
     }

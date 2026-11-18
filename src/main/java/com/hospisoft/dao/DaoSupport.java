@@ -9,11 +9,6 @@ import java.sql.Types;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Helpers shared by the JDBC DAOs: parameter binding and translation of constraint violations
- * into the typed exceptions the services and the bridge understand. Typed runtime exceptions pass
- * through {@code ConnectionPool.withConnection} unchanged (it only classifies SQLExceptions).
- */
 final class DaoSupport {
 
     static final String UNIQUE_VIOLATION = "23505";
@@ -22,7 +17,6 @@ final class DaoSupport {
     private DaoSupport() {
     }
 
-    /** Binds filter parameters (String, Boolean, Long, LocalDate) starting at index 1; returns the next free index. */
     static int bind(PreparedStatement ps, List<Object> params) throws SQLException {
         int index = 1;
         for (Object value : params) {
@@ -39,12 +33,10 @@ final class DaoSupport {
         }
     }
 
-    /** A UNIQUE violation on documento becomes a field validation error; anything else propagates. */
     static RuntimeException duplicateDocumento(SQLException ex) {
         return duplicateKey(ex, "documento");
     }
 
-    /** A UNIQUE violation becomes a validation error on {@code field}; anything else propagates (null). */
     static RuntimeException duplicateKey(SQLException ex, String field) {
         if (UNIQUE_VIOLATION.equals(ex.getSQLState())) {
             return new ValidationException(Map.of(field, Validation.duplicateMessage(field)));
@@ -52,7 +44,6 @@ final class DaoSupport {
         return null;
     }
 
-    /** A FOREIGN KEY violation on delete means the row has history; anything else propagates. */
     static RuntimeException hasHistory(SQLException ex) {
         if (FOREIGN_KEY_VIOLATION.equals(ex.getSQLState())) {
             return new HasHistoryException("Row is referenced by other rows", ex);
@@ -60,12 +51,6 @@ final class DaoSupport {
         return null;
     }
 
-    /**
-     * A FOREIGN KEY violation on insert/update becomes a validation error on the field whose column
-     * name appears in the driver message (e.g. {@code cita_id_paciente_fkey}); null when not a FK error.
-     *
-     * @param columnToField column name -> form field name
-     */
     static RuntimeException foreignKeyViolation(SQLException ex, Map<String, String> columnToField) {
         if (!FOREIGN_KEY_VIOLATION.equals(ex.getSQLState())) {
             return null;
@@ -83,7 +68,6 @@ final class DaoSupport {
         return new ValidationException(all);
     }
 
-    /** Throws when an UPDATE/DELETE touched no row. */
     static void requireAffected(int affected, String entity, long id) {
         if (affected == 0) {
             throw new NotFoundException(entity + " " + id + " not found");

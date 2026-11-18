@@ -30,24 +30,23 @@ class DashboardDaoTest {
             "paciente_documento", "2001");
     }
 
-    /** Queues the five scoped answers every snapshot needs, in call order. */
     private void queueScopedAnswers() {
-        jdbc.rows(FakeJdbc.row("count", 4L))                                   // citas del dia
-            .rows(FakeJdbc.row("count", 3L))                                   // citas pendientes
-            .rows(FakeJdbc.row("estado", "FINALIZADA", "count", 2L),           // resumen
+        jdbc.rows(FakeJdbc.row("count", 4L))
+            .rows(FakeJdbc.row("count", 3L))
+            .rows(FakeJdbc.row("estado", "FINALIZADA", "count", 2L),
                 FakeJdbc.row("estado", "PROGRAMADA", "count", 1L),
                 FakeJdbc.row("estado", "EN_CURSO", "count", 1L),
                 FakeJdbc.row("estado", "CANCELADA", "count", 1L))
-            .rows(FakeJdbc.row("avg", 24.5))                                   // duracion promedio
-            .rows(citaRow());                                                  // proximas
+            .rows(FakeJdbc.row("avg", 24.5))
+            .rows(citaRow());
     }
 
     @Test
     void globalScopeAsksForTheHospitalWideCounts() {
         queueScopedAnswers();
-        jdbc.rows(FakeJdbc.row("count", 3L))    // medicos activos
-            .rows(FakeJdbc.row("count", 5L))    // pacientes activos
-            .rows(FakeJdbc.row("count", 9L));   // medicamentos activos
+        jdbc.rows(FakeJdbc.row("count", 3L))
+            .rows(FakeJdbc.row("count", 5L))
+            .rows(FakeJdbc.row("count", 9L));
         DashboardSnapshot snapshot = dao.snapshot(Scope.ALL, DAY_START, DAY_END, NOW, 5);
 
         assertEquals(DashboardDao.COUNT_CITAS_DEL_DIA, jdbc.call(0).sql);
@@ -82,7 +81,7 @@ class DashboardDaoTest {
     @Test
     void medicoScopeAppendsTheMedicoFilterToEveryQuery() {
         queueScopedAnswers();
-        jdbc.rows(FakeJdbc.row("count", 7L)); // pacientes atendidos
+        jdbc.rows(FakeJdbc.row("count", 7L));
         DashboardSnapshot snapshot = dao.snapshot(Scope.medico(10), DAY_START, DAY_END, NOW, 5);
 
         assertEquals(DashboardDao.COUNT_CITAS_DEL_DIA + " AND id_medico = ?", jdbc.call(0).sql);
@@ -108,9 +107,9 @@ class DashboardDaoTest {
     @Test
     void pacienteScopeAddsTheOwnTotals() {
         queueScopedAnswers();
-        jdbc.rows(FakeJdbc.row("count", 6L))   // citas totales
-            .rows(FakeJdbc.row("count", 4L))   // recetas
-            .rows(FakeJdbc.row("count", 2L));  // historias
+        jdbc.rows(FakeJdbc.row("count", 6L))
+            .rows(FakeJdbc.row("count", 4L))
+            .rows(FakeJdbc.row("count", 2L));
         DashboardSnapshot snapshot = dao.snapshot(Scope.paciente(20), DAY_START, DAY_END, NOW, 5);
 
         assertEquals(DashboardDao.COUNT_CITAS_DEL_DIA + " AND id_paciente = ?", jdbc.call(0).sql);
@@ -129,8 +128,8 @@ class DashboardDaoTest {
     void emptyDayReportsZerosAndNoAverage() {
         jdbc.rows(FakeJdbc.row("count", 0L))
             .rows(FakeJdbc.row("count", 0L))
-            .rows()                                   // no rows grouped by estado
-            .rows(FakeJdbc.row("avg", null))          // AVG over no rows is NULL
+            .rows()
+            .rows(FakeJdbc.row("avg", null))
             .rows()
             .rows(FakeJdbc.row("count", 0L))
             .rows(FakeJdbc.row("count", 0L))
@@ -194,7 +193,6 @@ class DashboardDaoTest {
 
     @Test
     void theComposedSqlIsExactlyWhatWeExpect() {
-        // the literal text matters: a stray space or a missing alias would silently break the filter
         assertEquals("SELECT count(*) FROM cita WHERE fecha_hora_programada >= ?"
                 + " AND fecha_hora_programada < ? AND id_medico = ?",
             DashboardDao.COUNT_CITAS_DEL_DIA + DashboardDao.scopeClause(Scope.medico(10), ""));

@@ -1,6 +1,5 @@
 package com.hospisoft.model;
 
-/** A cita joined with the display columns of its medico and paciente. */
 public record CitaView(
     Cita cita,
     String medicoNombres,

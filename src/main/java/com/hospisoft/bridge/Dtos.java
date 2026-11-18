@@ -10,11 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-/**
- * Conversions between model records and the plain JSON objects exchanged with the page.
- * Dates travel as ISO strings (yyyy-MM-dd); ids as numbers. {@code activo} is optional in input:
- * the record carries true when omitted and the service decides (insert: true; update: keep stored).
- */
 public final class Dtos {
 
     private Dtos() {
@@ -46,7 +41,6 @@ public final class Dtos {
             Payload.optBoolean(body, "activo", true));
     }
 
-    /** @param today used to compute {@code edad} */
     public static Map<String, Object> toMap(Paciente p, LocalDate today) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", p.id());
@@ -78,7 +72,6 @@ public final class Dtos {
             Payload.optBoolean(body, "activo", true));
     }
 
-    /** {@code {items, total, page, pageSize, totalPages}} */
     public static <T> Map<String, Object> toMap(Page<T> page, Function<T, Map<String, Object>> item) {
         List<Map<String, Object>> items = new ArrayList<>(page.items().size());
         for (T t : page.items()) {

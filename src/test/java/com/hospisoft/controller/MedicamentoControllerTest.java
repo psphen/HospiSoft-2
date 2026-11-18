@@ -33,7 +33,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** End-to-end medicamento methods through the async bridge with the in-memory repository. */
 class MedicamentoControllerTest {
 
     private static final SessionContext ADMIN = new SessionContext(1, "admin", Rol.ADMIN, null, "Administrador");
@@ -156,18 +155,15 @@ class MedicamentoControllerTest {
             "{\"codigo\":\"MED-021\",\"nombre\":\"N\",\"presentacion\":\"P\",\"stock\":\"  \",\"stockMinimo\":1}");
         assertEquals("Campo obligatorio", ((Map<String, Object>) blank.get("errors")).get("stock"));
 
-        // update without stockExpected is rejected
         Map<String, Object> stale = invoke("saveMedicamento",
             "{\"id\":" + id + ",\"codigo\":\"MED-020\",\"nombre\":\"Omeprazol 20\",\"presentacion\":\"Caja\",\"stock\":0,\"stockMinimo\":5}");
         assertEquals("VALIDATION", stale.get("code"));
         assertEquals("Recargue el registro", ((Map<String, Object>) stale.get("errors")).get("stock"));
 
-        // with the loaded stock it goes through
         Map<String, Object> kept = data(invoke("saveMedicamento",
             "{\"id\":" + id + ",\"codigo\":\"MED-020\",\"nombre\":\"Omeprazol 20\",\"presentacion\":\"Caja\",\"stock\":0,\"stockMinimo\":5,\"stockExpected\":20}"));
         assertEquals("AGOTADO", kept.get("stockState"));
 
-        // a stale form (stockExpected 20, stock is now 0) answers CONFLICT
         Map<String, Object> conflict = invoke("saveMedicamento",
             "{\"id\":" + id + ",\"codigo\":\"MED-020\",\"nombre\":\"Omeprazol 20\",\"presentacion\":\"Caja\",\"stock\":7,\"stockMinimo\":5,\"stockExpected\":20}");
         assertEquals(false, conflict.get("ok"));
@@ -192,8 +188,6 @@ class MedicamentoControllerTest {
         sessions.clear();
         assertEquals("FORBIDDEN", invoke("listMedicamentos", "{}").get("code"));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportWritesStockLabelsAndActivo() throws Exception {

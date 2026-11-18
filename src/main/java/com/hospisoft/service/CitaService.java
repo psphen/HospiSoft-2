@@ -27,21 +27,6 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 
-/**
- * Cita use cases (phase 4: scheduling, rescheduling, cancelling, agenda).
- *
- * <p>Rules: a cita occupies [fecha_hora_programada, + {@link #SLOT_MINUTES}); it must start at or
- * after {@link #WORK_START} and end at or before {@link #WORK_END}, within {@link #MAX_HORIZON_DAYS}
- * from today. A medico (and a paciente) may not have two non-cancelled citas whose intervals
- * intersect; adjacent slots are fine. New citas are always PROGRAMADA and may not be in the past.
- * Only PROGRAMADA citas can be rescheduled or cancelled. The row locks (medico first, then
- * paciente, {@code FOR NO KEY UPDATE}), the active re-checks, the overlap checks and the write
- * share one transaction. When a {@code fecha} filter is given the {@code rango} preset is ignored.
- * Creating, rescheduling and cancelling are recorded in the audit log after the commit.
- *
- * <p>Roles: ADMIN full; MEDICO read-only on own citas and own agenda; PACIENTE read-only on own
- * citas. Out-of-scope reads answer NOT_FOUND.
- */
 public final class CitaService {
 
     public static final int SLOT_MINUTES = 30;
@@ -95,8 +80,6 @@ public final class CitaService {
         return LocalDate.now(clock.withZone(zone.zone()));
     }
 
-    // ------------------------------------------------------------ reads
-
     public Page<CitaView> list(CitaFilter filter, int page, int pageSize) {
         SessionContext session = access.require(Rol.ADMIN, Rol.MEDICO, Rol.PACIENTE);
         CitaFilter f = filter == null ? CitaFilter.NONE : filter;
@@ -108,7 +91,6 @@ public final class CitaService {
         } else if (session.rol() == Rol.PACIENTE) {
             idPaciente = referenceOf(session);
         }
-        // an explicit day takes precedence over the range preset
         OffsetDateTime[] range = f.fecha() != null ? new OffsetDateTime[] {null, null} : rangeBounds(f.rango());
         CitaQuery query = new CitaQuery(f.texto(),
             f.fecha() == null ? null : zone.dayStart(f.fecha()),
@@ -117,7 +99,6 @@ public final class CitaService {
         return citas.findPage(query, page, pageSize);
     }
 
-    /** Every row {@link #list} would page through (same permission and role scope), up to the export cap. */
     public ExportRows<CitaView> listForExport(CitaFilter filter) {
         return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
     }
@@ -131,7 +112,6 @@ public final class CitaService {
         return view;
     }
 
-    /** @param idMedico null means "the session's own medico" (MEDICO only) */
     public Agenda agenda(Long idMedico, LocalDate fecha) {
         SessionContext session = access.require(Rol.ADMIN, Rol.MEDICO);
         long medico;
@@ -158,11 +138,11 @@ public final class CitaService {
         }
         for (CitaView view : ofDay) {
             if (view.cita().estado() == EstadoCita.CANCELADA) {
-                continue; // a cancelled cita frees its slot
+                continue;
             }
             LocalTime time = zone.timeOf(view.cita().fechaHoraProgramada());
             LocalTime gridSlot = gridSlotOf(time);
-            LocalTime key = gridSlot != null ? gridSlot : time; // outside working hours: its own time
+            LocalTime key = gridSlot != null ? gridSlot : time;
             byTime.computeIfAbsent(key, k -> new ArrayList<>()).add(view);
         }
         List<Agenda.Slot> slots = new ArrayList<>(byTime.size());
@@ -170,7 +150,6 @@ public final class CitaService {
         return new Agenda(medico, day, slots);
     }
 
-    /** The working-hours grid slot whose [slot, slot + SLOT) contains {@code time}; null outside hours. */
     private static LocalTime gridSlotOf(LocalTime time) {
         if (time.isBefore(WORK_START) || !time.isBefore(WORK_END)) {
             return null;
@@ -189,8 +168,6 @@ public final class CitaService {
         return pacientes.findActiveForSelect();
     }
 
-    // ------------------------------------------------------------ writes
-
     public CitaView create(CitaInput input) {
         access.require(Rol.ADMIN);
         Scheduled s = validate(input);
@@ -200,7 +177,6 @@ public final class CitaService {
             return tx.insert(new Cita(null, s.idMedico, s.idPaciente, s.start, s.motivo, EstadoCita.PROGRAMADA,
                 null, null, null));
         });
-        // committed: audit BEFORE the reload, from data already in hand, so a failed read cannot hide the write
         audit.record(AccionAuditoria.CREAR, ModuloAuditoria.CITA, id,
             "Cita #" + id + " creada para " + slotText(s.start) + s.partiesText());
         return citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
@@ -217,7 +193,6 @@ public final class CitaService {
             tx.reschedule(id, s.idMedico, s.idPaciente, s.start, s.motivo);
             return null;
         });
-        // committed: audit BEFORE the reload, from data already in hand, so a failed read cannot hide the write
         audit.record(AccionAuditoria.REPROGRAMAR, ModuloAuditoria.CITA, id,
             "Cita #" + id + " reprogramada a " + slotText(s.start) + s.partiesText());
         return citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
@@ -234,18 +209,12 @@ public final class CitaService {
         return citas.findById(id).orElseThrow(() -> new NotFoundException("Cita " + id + " not found"));
     }
 
-    // ------------------------------------------------------------ internals
-
-    /** Local wall time of a slot for the audit text, e.g. "2026-11-05 10:00". */
     private String slotText(OffsetDateTime start) {
         return start.atZoneSameInstant(zone.zone()).format(AUDIT_SLOT);
     }
 
-    /** Validated input; the display names come from the rows loaded during validation (for the audit text). */
     private record Scheduled(long idMedico, long idPaciente, OffsetDateTime start, OffsetDateTime end, String motivo,
                              String medicoNombre, String pacienteNombre) {
-
-        /** " - Paciente con Medico". */
         String partiesText() {
             return " - " + pacienteNombre + " con " + medicoNombre;
         }
@@ -257,7 +226,6 @@ public final class CitaService {
         }
     }
 
-    /** Locks medico THEN paciente (global order) and re-checks existence and activity inside the transaction. */
     private static void lockAndCheckParties(CitaRepository.CitaTx tx, Scheduled s) {
         Optional<Boolean> medico = tx.lockMedico(s.idMedico);
         if (medico.isEmpty()) {
@@ -284,7 +252,6 @@ public final class CitaService {
         }
     }
 
-    /** Fast-path validation outside the transaction; existence and activity are re-checked inside it. */
     private Scheduled validate(CitaInput in) {
         Validation v = new Validation();
         Long idMedico = in.idMedico();
@@ -341,7 +308,7 @@ public final class CitaService {
                     v.reject("hora", BAD_MINUTE);
                 } else if (time.isBefore(WORK_START) || time.plusMinutes(SLOT_MINUTES).isAfter(WORK_END)
                     || time.plusMinutes(SLOT_MINUTES).isBefore(time)) {
-                    v.reject("hora", OUTSIDE_HOURS); // the last clause catches wrap-around past midnight
+                    v.reject("hora", OUTSIDE_HOURS);
                 }
             } catch (DateTimeParseException ex) {
                 v.reject("hora", BAD_TIME);
@@ -379,7 +346,6 @@ public final class CitaService {
         };
     }
 
-    /** Ids are boxed Longs: compare by value, never by reference (ids above 127 are not cached). */
     private static boolean inScope(SessionContext session, CitaView view) {
         return switch (session.rol()) {
             case ADMIN -> true;

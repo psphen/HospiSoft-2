@@ -4,13 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Format-neutral table handed to the exporters: a title, a subtitle (e.g. "Generado el ... por ..."),
- * the column headers and the rows as display-ready text. Null cells become empty strings.
- *
- * @param widths relative column width hints (one positive weight per column); null or empty means
- *               equal widths. The PDF uses them as relative widths; Excel sizes columns by content.
- */
 public record TableExport(String title, String subtitle, List<String> headers, List<List<String>> rows,
                           List<Integer> widths) {
 
@@ -20,7 +13,7 @@ public record TableExport(String title, String subtitle, List<String> headers, L
         if (headers == null || headers.isEmpty()) {
             throw new IllegalArgumentException("at least one header is required");
         }
-        for (String header : headers) { // List.of(...).contains(null) would throw instead of answering
+        for (String header : headers) {
             if (header == null) {
                 throw new IllegalArgumentException("headers must not be null");
             }

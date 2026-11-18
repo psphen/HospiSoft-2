@@ -1,7 +1,3 @@
-/*
- * Medicos page: list with filters and pagination, create/edit modal, delete modal.
- * Every data operation goes through HospiSoft.appCall; rules and permissions live in Java.
- */
 (function () {
   'use strict';
 
@@ -53,7 +49,7 @@
     window.HospiSoft.appCall('listMedicos', { filter: currentFilter(), page: page, pageSize: crud.PAGE_SIZE })
       .then(function (response) {
         if (!crud.isCurrent('list', token)) {
-          return; // a newer request already answered
+          return;
         }
         if (!response.ok) {
           body.innerHTML = crud.emptyRow(COLUMNS, response.message);
@@ -114,16 +110,13 @@
         especialidadFilter.appendChild(option);
       });
       especialidadFilter.value = selected;
-    }).catch(function () { /* the filter simply keeps its default option */ });
+    }).catch(function () {});
   }
-
-  /* ---------------------------------------------------------------- modal form */
 
   function hasOption(select, value) {
     return Array.prototype.some.call(select.options, function (o) { return o.value === value && o.value !== OTHER; });
   }
 
-  /* Rebuilds the modal select from the known specialties plus the fixed "Otra" option. */
   function buildEspecialidadOptions(current) {
     var names = especialidades.slice();
     if (current && names.indexOf(current) === -1) {
@@ -201,7 +194,7 @@
   function openEdit(id) {
     fillForm(null);
     title.textContent = 'Editar Médico';
-    saveButton.disabled = true; // never allow saving an "edit" form that has no id yet
+    saveButton.disabled = true;
     window.HospiSoft.appCall('getMedico', { id: id }).then(function (response) {
       if (!response.ok) {
         abandonEdit(response.message);
@@ -266,8 +259,6 @@
       });
   }
 
-  /* ---------------------------------------------------------------- events */
-
   function bind() {
     document.getElementById('btn-filter').addEventListener('click', function () { load(1); });
     searchInput.addEventListener('keydown', function (event) {
@@ -297,7 +288,6 @@
       }
     });
     saveButton.addEventListener('click', save);
-    /* Enter inside the form saves only while Guardar is enabled (the "disabled until loaded" guard holds). */
     form.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
         event.preventDefault();

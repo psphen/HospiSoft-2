@@ -1,8 +1,3 @@
-/*
- * Shared helpers for the list pages (medicos.js, pacientes.js, citas.js, medicamentos.js,
- * auditoria.js): table rendering utilities, pagination, modal form state, validation feedback and
- * the "Exportar" dropdown. Pure view glue; rules live in Java.
- */
 (function () {
   'use strict';
 
@@ -37,7 +32,6 @@
     return '<tr><td colspan="' + columns + '" class="text-center text-muted py-4">' + escapeHtml(text) + '</td></tr>';
   }
 
-  /* Renders "Mostrando X de N <noun>" and the prev / numbered / next controls. */
   function renderPagination(summaryEl, listEl, page, noun, onPage) {
     var shown = page.items.length;
     summaryEl.textContent = 'Mostrando ' + shown + ' de ' + page.total + ' ' + noun;
@@ -73,10 +67,6 @@
     }
   }
 
-  /*
-   * Request sequencing: a slow response must never overwrite a newer one. Callers take a token
-   * before sending and check isCurrent(key, token) before touching the DOM.
-   */
   var requestCounters = {};
 
   function nextRequest(key) {
@@ -88,13 +78,11 @@
     return requestCounters[key] === token;
   }
 
-  /* Called when a list request fails: no stale counts or page links remain. */
   function clearPagination(summaryEl, listEl) {
     summaryEl.textContent = '';
     listEl.innerHTML = '';
   }
 
-  /* Page to reload when the current page ran past the end (e.g. after a delete). */
   function clampedPage(page) {
     if (page.items.length === 0 && page.page > page.totalPages && page.totalPages >= 1) {
       return page.totalPages;
@@ -102,7 +90,6 @@
     return null;
   }
 
-  /* Validation feedback: marks fields with is-invalid and fills their invalid-feedback div. */
   function clearValidation(form) {
     Array.prototype.forEach.call(form.querySelectorAll('.is-invalid'), function (el) {
       el.classList.remove('is-invalid');
@@ -160,19 +147,14 @@
     return window.bootstrap.Modal.getOrCreateInstance(document.getElementById(id));
   }
 
-  /* Text to show after a delete, according to the Java outcome. */
   function deleteMessage(outcome) {
     return outcome === 'DEACTIVATED'
       ? 'Se dio de baja (tiene historial asociado)'
       : 'Eliminado';
   }
 
-  /* ---------------------------------------------------------------- list export */
-
-  /* The Java side waits on a save dialog: give the user plenty of time before the call times out. */
   var EXPORT_TIMEOUT_MS = 30 * 60 * 1000;
 
-  /* First field message of a VALIDATION envelope, else the envelope message. */
   function errorText(response) {
     if (response.code === 'VALIDATION' && response.errors) {
       var fields = Object.keys(response.errors);
@@ -183,13 +165,6 @@
     return response.message;
   }
 
-  /*
-   * Wires the "Exportar" dropdown (#export-menu) of a list page and makes it visible.
-   *   options.method  bridge method, e.g. 'exportPacientes'
-   *   options.filter  function returning the CURRENT list filter, or null to abort (invalid input)
-   * Every format item carries data-export-format="xlsx|pdf". The toggle is disabled while Java
-   * renders, asks where to save and writes; a cancelled dialog shows nothing.
-   */
   function bindExport(options) {
     var root = document.getElementById(options.menuId || 'export-menu');
     if (!root) {

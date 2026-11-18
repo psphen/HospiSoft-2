@@ -45,8 +45,6 @@ class MedicoServiceTest {
         service = new MedicoService(repository, () -> Optional.ofNullable(current), audit);
     }
 
-    // ------------------------------------------------------------ audit
-
     @Test
     void saveIsAuditedAsCrearOrEditar() {
         Medico created = service.save(medico(null, "1004", "Ana", "Mora", "Dermatologia", true));
@@ -82,8 +80,6 @@ class MedicoServiceTest {
         assertTrue(audit.entries().isEmpty());
     }
 
-    // ------------------------------------------------------------ permissions
-
     @Test
     void medicoAndPacienteRolesHaveNoAccess() {
         for (SessionContext session : List.of(MEDICO, PACIENTE)) {
@@ -101,8 +97,6 @@ class MedicoServiceTest {
         current = null;
         assertThrows(PermissionException.class, () -> service.list(MedicoFilter.NONE, 1, 10));
     }
-
-    // ------------------------------------------------------------ list / get
 
     @Test
     void listsWithFiltersAndPaging() {
@@ -134,8 +128,6 @@ class MedicoServiceTest {
     void especialidadesAreDistinctAndSorted() {
         assertEquals(List.of("Cardiologia", "Medicina General", "Pediatria"), service.especialidades());
     }
-
-    // ------------------------------------------------------------ save
 
     @Test
     void insertTrimsAndAssignsId() {
@@ -202,13 +194,11 @@ class MedicoServiceTest {
 
     @Test
     void documentoUniquenessExcludesSelfOnUpdate() {
-        service.save(medico(10L, "1001", "Carlos", "Garcia", "Medicina General", true)); // same documento, same row
+        service.save(medico(10L, "1001", "Carlos", "Garcia", "Medicina General", true));
         ValidationException ex = assertThrows(ValidationException.class,
             () -> service.save(medico(10L, "1002", "Carlos", "Garcia", "Medicina General", true)));
         assertEquals(Validation.DUPLICATE_DOCUMENTO, ex.errors().get("documento"));
     }
-
-    // ------------------------------------------------------------ delete
 
     @Test
     void deleteWithoutHistoryRemovesTheRow() {
@@ -255,8 +245,6 @@ class MedicoServiceTest {
     void deleteUnknownIsNotFound() {
         assertThrows(NotFoundException.class, () -> service.delete(999));
     }
-
-    // ------------------------------------------------------------ export
 
     @Test
     void exportUsesTheSameFilterAsTheListAndIsAdminOnly() {

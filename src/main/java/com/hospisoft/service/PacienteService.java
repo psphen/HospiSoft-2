@@ -15,12 +15,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/**
- * Paciente use cases. ADMIN has full CRUD; MEDICO may only read the patients it has attended
- * (at least one non-cancelled cita) and gets NOT_FOUND, never FORBIDDEN, for anything out of
- * scope so it cannot probe which ids exist; PACIENTE has no access in this phase. Every successful
- * write is recorded in the audit log (CREAR, EDITAR, ELIMINAR or DESACTIVAR).
- */
 public final class PacienteService {
 
     static final int MAX_DOCUMENTO = 20;
@@ -69,7 +63,6 @@ public final class PacienteService {
         return pacientes.findPage(safe, page, pageSize);
     }
 
-    /** Every row {@link #list} would page through (same permission and MEDICO scope), up to the export cap. */
     public ExportRows<Paciente> listForExport(PacienteFilter filter) {
         return ExportRows.collect((page, pageSize) -> list(filter, page, pageSize));
     }
@@ -82,15 +75,10 @@ public final class PacienteService {
         return found.orElseThrow(() -> new NotFoundException("Paciente " + id + " not found"));
     }
 
-    /** Insert when the id is null or 0, update otherwise, with {@code activo} taken from the input. */
     public Paciente save(Paciente input) {
         return save(input, input.activo());
     }
 
-    /**
-     * @param activo null keeps the stored value on update (true on insert); otherwise the new value
-     * @return the stored row
-     */
     public Paciente save(Paciente input, Boolean activo) {
         access.require(Rol.ADMIN);
         Paciente clean = normalize(input);
@@ -134,13 +122,11 @@ public final class PacienteService {
             pacientes.delete(id);
             return DeleteOutcome.DELETED;
         } catch (HasHistoryException ex) {
-            // history appeared between the check and the delete: deactivate instead
             pacientes.setActivo(id, false);
             return DeleteOutcome.DEACTIVATED;
         }
     }
 
-    /** Audit text, e.g. "Paciente 1234567890 - María Torres". */
     private static String detalle(Paciente p) {
         return "Paciente " + p.documento() + " - " + p.nombres() + " " + p.apellidos();
     }

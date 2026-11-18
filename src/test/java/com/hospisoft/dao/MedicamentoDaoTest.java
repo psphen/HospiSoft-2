@@ -95,13 +95,11 @@ class MedicamentoDaoTest {
         assertEquals(150, jdbc.call(0).params.get(9));
         assertEquals(1, jdbc.calls.size(), "no existence query when the update applied");
 
-        // 0 rows and the row exists -> CONFLICT (same connection, second statement)
         jdbc.update(0).rows(FakeJdbc.row("exists", true));
         assertThrows(ConflictException.class, () -> dao.update(MED, 150));
         assertEquals(MedicamentoDao.EXISTS_BY_ID, jdbc.call(2).sql);
         assertEquals(List.of(5L), jdbc.call(2).values());
 
-        // 0 rows and the row is gone -> NOT_FOUND
         jdbc.update(0).rows(FakeJdbc.row("exists", false));
         assertThrows(NotFoundException.class, () -> dao.update(MED, 150));
 

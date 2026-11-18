@@ -1,7 +1,3 @@
-/*
- * Pacientes page: list with filters and pagination, create/edit modal, delete modal.
- * MEDICO sessions get a read-only view (cosmetic; the Java service enforces it).
- */
 (function () {
   'use strict';
 
@@ -38,7 +34,6 @@
   var currentPage = 1;
   var pendingDeleteId = null;
   var readOnly = false;
-  /* Rows of the current page by id, for the historial header. */
   var loadedPacientes = {};
 
   function currentFilter() {
@@ -56,7 +51,7 @@
     window.HospiSoft.appCall('listPacientes', { filter: currentFilter(), page: page, pageSize: crud.PAGE_SIZE })
       .then(function (response) {
         if (!crud.isCurrent('list', token)) {
-          return; // a newer request already answered
+          return;
         }
         if (!response.ok) {
           body.innerHTML = crud.emptyRow(COLUMNS, response.message);
@@ -109,8 +104,6 @@
       + '</tr>';
   }
 
-  /* ---------------------------------------------------------------- modal form */
-
   function fillForm(p) {
     document.getElementById('paciente-id').value = p ? p.id : '';
     document.getElementById('paciente-documento').value = p ? p.documento : '';
@@ -153,7 +146,7 @@
   function openEdit(id) {
     fillForm(null);
     title.textContent = 'Editar Paciente';
-    saveButton.disabled = true; // never allow saving an "edit" form that has no id yet
+    saveButton.disabled = true;
     window.HospiSoft.appCall('getPaciente', { id: id }).then(function (response) {
       if (!response.ok) {
         abandonEdit(response.message);
@@ -216,8 +209,6 @@
         window.HospiSoft.showToast('danger', error.message);
       });
   }
-
-  /* ---------------------------------------------------------------- historial (read-only) */
 
   var historialPaciente = null;
   var historialPage = 1;
@@ -286,7 +277,6 @@
     crud.renderPagination(historialSummary, historialPagination, pageData, 'historias', loadHistorial);
   }
 
-  /* JavaFX WebKit may render type="date" as a plain text box: keep the ISO placeholder usable. */
   function prepareDateInput() {
     var native = birthInput.type === 'date';
     console.log('date input native picker: ' + native);
@@ -302,8 +292,6 @@
       document.getElementById('btn-add').style.display = 'none';
     }
   }
-
-  /* ---------------------------------------------------------------- events */
 
   function bind() {
     document.getElementById('btn-filter').addEventListener('click', function () { load(1); });
@@ -321,7 +309,6 @@
       }
       var historia = historialRows[button.getAttribute('data-id')];
       if (historia) {
-        /* the list rows carry no recetas: reload the full record by its cita */
         window.HospiSoftAtencion.openHistoriaDeCita(historia.idCita);
       }
     });
@@ -341,7 +328,6 @@
       }
     });
     saveButton.addEventListener('click', save);
-    /* Enter inside the form saves only while Guardar is enabled (the "disabled until loaded" guard holds). */
     form.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
         event.preventDefault();
@@ -360,7 +346,6 @@
   prepareDateInput();
   window.HospiSoft.onReady(function () {
     applyRole();
-    /* ADMIN and MEDICO both list (MEDICO: attended patients only); export follows the same scope */
     crud.bindExport({ method: 'exportPacientes', filter: currentFilter });
     load(1);
   });

@@ -1,6 +1,3 @@
-/*
- * Login page glue. Database work goes through HospiSoft.appCall (asynchronous, never blocks the UI).
- */
 (function () {
   'use strict';
 
@@ -80,7 +77,6 @@
     }
   }
 
-  /* Fresh check on a background thread; the page shows PENDING meanwhile. */
   function checkStartup() {
     renderStatus({ state: 'PENDING' });
     window.HospiSoft.appCall('getStartupStatus').then(renderResponse).catch(function (error) {
@@ -88,7 +84,6 @@
     });
   }
 
-  /* Java pushes this event after a background refresh: read the cached value, no blocking. */
   function readCachedStatus() {
     renderResponse(window.HospiSoft.call('getStartupStatus'));
   }

@@ -15,7 +15,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** In-memory fake mirroring the DAO semantics (filters, stock state, ordering, paging). */
 public class InMemoryMedicamentoRepository implements MedicamentoRepository {
 
     private final Map<Long, Medicamento> rows = new LinkedHashMap<>();
@@ -43,12 +42,10 @@ public class InMemoryMedicamentoRepository implements MedicamentoRepository {
         return rows.size();
     }
 
-    /** Every row (active and inactive), for transaction snapshots in tests. */
     public List<Medicamento> allRows() {
         return new ArrayList<>(rows.values());
     }
 
-    /** Overwrites a row without the optimistic stock check. */
     public void replace(Medicamento m) {
         rows.put(m.id(), m);
     }

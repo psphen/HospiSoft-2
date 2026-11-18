@@ -39,8 +39,6 @@ class AtencionDaoTest {
             "codigo", "MED-001", "nombre", "Acetaminofen", "presentacion", "Caja x 20");
     }
 
-    // ------------------------------------------------------------ reads
-
     @Test
     void historiaOfACitaCarriesItsRecetas() {
         jdbc.rows(historiaRow(7, 3)).rows(recetaRow(1, true), recetaRow(2, false));
@@ -106,8 +104,6 @@ class AtencionDaoTest {
         assertEquals(List.of(20L, 10L, 0L), jdbc.call(1).values());
         assertEquals(T0, page.items().get(0).receta().fechaHistoria());
     }
-
-    // ------------------------------------------------------------ transaction
 
     @Test
     void iniciarLocksTheMedicoChecksEnCursoAndGuardsTheState() {
@@ -203,7 +199,6 @@ class AtencionDaoTest {
         ValidationException ex = assertThrows(ValidationException.class,
             () -> dao.inTransaction(tx -> tx.iniciar(3, 10)));
         assertEquals("Ya tiene una atención en curso", ex.errors().get("estado"));
-        // any other unique violation on that statement is not swallowed
         jdbc.fail("23505", "duplicate key value violates unique constraint \"some_other_key\"");
         assertThrows(IllegalStateException.class, () -> dao.inTransaction(tx -> tx.iniciar(3, 10)));
     }

@@ -42,7 +42,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** End-to-end attention methods through the async bridge with in-memory repositories. */
 class AtencionControllerTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
@@ -231,11 +230,9 @@ class AtencionControllerTest {
         String base = "{\"idCita\":1,\"diagnostico\":\"d\",\"tratamiento\":\"t\",\"recetas\":"
             + "[{\"idMedicamento\":5,\"cantidad\":%s,\"dosis\":\"d\",\"duracion\":\"x\"}]}";
 
-        // a numeric string is accepted
         Map<String, Object> ok = data(invoke("finalizarAtencion", String.format(base, "\"5\"")));
         assertEquals(5L, list(ok.get("recetas")).get(0).get("cantidad"));
 
-        // out-of-range values report the range, not the generic integer message
         Map<String, Object> huge = invoke("finalizarAtencion", String.format(base, "1000000000"));
         assertEquals("Debe estar entre 1 y 9999",
             ((Map<String, Object>) huge.get("errors")).get("recetas[0].cantidad"));

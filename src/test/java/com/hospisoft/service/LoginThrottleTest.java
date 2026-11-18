@@ -31,7 +31,6 @@ class LoginThrottleTest {
         assertThrows(AuthenticationException.class, () -> throttle.check("admin"));
         now.addAndGet(1);
         assertDoesNotThrow(() -> throttle.check("admin"));
-        // counter restarted after the lock expired
         for (int i = 0; i < LoginThrottle.MAX_FAILURES - 1; i++) {
             throttle.recordFailure("admin");
         }

@@ -17,21 +17,10 @@ import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-/**
- * Writes a {@link TableExport} as an .xlsx workbook with Apache POI: title and subtitle on top,
- * a bold filled header row that stays frozen and carries an auto-filter, then one row per record.
- *
- * <p>Every value is written as a STRING cell, never as a formula, so text such as
- * {@code =cmd|...} or {@code +SUM(...)} coming from the database stays inert (no formula injection).
- * Column widths follow the longest value, capped at {@link #MAX_COLUMN_CHARS}.
- */
 public final class ExcelExporter {
-
-    /** 0-based index of the header row (title, subtitle and a blank row come first). */
     public static final int HEADER_ROW = 3;
     static final int MIN_COLUMN_CHARS = 6;
     static final int MAX_COLUMN_CHARS = 60;
-    /** Excel's limit for the text of one cell. */
     static final int MAX_CELL_CHARS = 32_767;
     private static final int CHAR_WIDTH_UNITS = 256;
     private static final String DEFAULT_SHEET = "Datos";
@@ -82,7 +71,6 @@ public final class ExcelExporter {
         }
     }
 
-    /** Always a string cell: {@code setCellValue(String)} never creates a formula. */
     private static void text(Row row, int column, String value, CellStyle style) {
         var cell = row.createCell(column);
         cell.setCellValue(value);
@@ -101,7 +89,6 @@ public final class ExcelExporter {
         return longest;
     }
 
-    /** Excel sheet names: at most 31 chars, none of {@code : \ / ? * [ ]}. */
     static String sheetName(String title) {
         String clean = title == null ? "" : title.replaceAll("[:\\\\/?*\\[\\]]", " ").trim();
         return clean.isEmpty() ? DEFAULT_SHEET : WorkbookUtil.createSafeSheetName(clean);
